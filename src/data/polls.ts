@@ -3,13 +3,14 @@ import { ElectionPoll } from '@/types';
 export const INITIAL_POLLS: ElectionPoll[] = [
   {
     id: 'eleicao-presidencia-2026',
-    title: 'Pesquisa Cívica: Presidência da República 2026',
+    title: 'Pesquisa Cívica: Presidência da República 2026 (2º Turno)',
     role: 'Presidente',
     state: 'BR',
+    round: '2º Turno',
     year: 2026,
-    description: 'Enquete cívica auditada com voto secreto por CPF único. Os votos são desvinculados da identidade do eleitor.',
+    description: 'Enquete cívica auditada com voto secreto por CPF único. Disputa oficial do 2º Turno entre os dois finalistas para a Presidência da República.',
     status: 'ABERTA',
-    totalVotes: 16920,
+    totalVotes: 12280,
     candidates: [
       {
         id: 'cand-lula',
@@ -34,28 +35,6 @@ export const INITIAL_POLLS: ElectionPoll[] = [
         judicialStatusSummary: 'Ficha Limpa apto · Processo criminal da Alerj arquivado pelo TJ-RJ sem julgamento de mérito',
       },
       {
-        id: 'cand-zema',
-        name: 'Romeu Zema Neto',
-        popularName: 'Romeu Zema',
-        number: '30',
-        party: 'NOVO',
-        photoUrl: '/images/politicians/romeu-zema.jpg',
-        politicianId: 'romeu-zema',
-        votes: 2480,
-        judicialStatusSummary: 'Ação civil pública de nomeações em trâmite no TJMG',
-      },
-      {
-        id: 'cand-caiado',
-        name: 'Ronaldo Ramos Caiado',
-        popularName: 'Ronaldo Caiado',
-        number: '44',
-        party: 'União Brasil',
-        photoUrl: '/images/politicians/ronaldo-caiado.jpg',
-        politicianId: 'ronaldo-caiado',
-        votes: 1640,
-        judicialStatusSummary: 'Mandato regular perante o TRE-GO · Ficha Limpa apto',
-      },
-      {
         id: 'cand-branco-nulo',
         name: 'Voto em Branco ou Nulo',
         popularName: 'Branco / Nulo',
@@ -68,13 +47,14 @@ export const INITIAL_POLLS: ElectionPoll[] = [
   },
   {
     id: 'eleicao-governo-sp-2026',
-    title: 'Pesquisa Cívica: Governo do Estado de São Paulo 2026',
+    title: 'Pesquisa Cívica: Governo do Estado de São Paulo 2026 (2º Turno)',
     role: 'Governador',
     state: 'SP',
+    round: '2º Turno',
     year: 2026,
-    description: 'Levantamento de intenção de voto para o Palácio dos Bandeirantes com checagem de fatos e situação judicial cruzada.',
+    description: 'Levantamento oficial de 2º Turno para o Palácio dos Bandeirantes com checagem de fatos e situação judicial cruzada.',
     status: 'ABERTA',
-    totalVotes: 12530,
+    totalVotes: 10350,
     candidates: [
       {
         id: 'cand-sp-tarcisio',
@@ -99,17 +79,6 @@ export const INITIAL_POLLS: ElectionPoll[] = [
         judicialStatusSummary: 'Representações eleitorais extintas · Ficha Limpa apto',
       },
       {
-        id: 'cand-sp-tabata',
-        name: 'Tabata Claudia Amaral de Pontes',
-        popularName: 'Tabata Amaral',
-        number: '40',
-        party: 'PSB',
-        photoUrl: '/images/politicians/tabata-amaral.jpg',
-        politicianId: 'tabata-amaral',
-        votes: 2180,
-        judicialStatusSummary: 'Ficha Limpa · Nenhum processo ou inquérito criminal',
-      },
-      {
         id: 'cand-sp-branco',
         name: 'Voto em Branco ou Nulo',
         popularName: 'Branco / Nulo',
@@ -117,60 +86,6 @@ export const INITIAL_POLLS: ElectionPoll[] = [
         party: 'Nenhum',
         photoUrl: '/images/politicians/branco-nulo.svg',
         votes: 1080,
-      }
-    ]
-  },
-  {
-    id: 'eleicao-senado-mg-2026',
-    title: 'Pesquisa Cívica: Senado Federal por Minas Gerais 2026',
-    role: 'Senador',
-    state: 'MG',
-    year: 2026,
-    description: 'Disputa para a representação de Minas Gerais no Senado Federal com transparência processual.',
-    status: 'ABERTA',
-    totalVotes: 8960,
-    candidates: [
-      {
-        id: 'cand-mg-nikolas',
-        name: 'Nikolas Ferreira de Oliveira',
-        popularName: 'Nikolas Ferreira',
-        number: '222',
-        party: 'PL',
-        photoUrl: '/images/politicians/nikolas-ferreira.jpg',
-        politicianId: 'nikolas-ferreira',
-        votes: 4120,
-        judicialStatusSummary: 'Inquérito no STF em apuração · 1 multa eleitoral de propaganda paga no TSE',
-      },
-      {
-        id: 'cand-mg-pacheco',
-        name: 'Rodrigo Otavio Soares Pacheco',
-        popularName: 'Rodrigo Pacheco',
-        number: '555',
-        party: 'PSD',
-        photoUrl: '/images/politicians/rodrigo-pacheco.jpg',
-        politicianId: 'rodrigo-pacheco',
-        votes: 2640,
-        judicialStatusSummary: 'Ficha Limpa · Sem condenações ou inquéritos abertos no STF',
-      },
-      {
-        id: 'cand-mg-cleitinho',
-        name: 'Cleiton Gontijo de Azevedo',
-        popularName: 'Cleitinho',
-        number: '100',
-        party: 'Republicanos',
-        photoUrl: '/images/politicians/cleitinho.jpg',
-        politicianId: 'cleitinho',
-        votes: 1420,
-        judicialStatusSummary: 'Prestação de contas do mandato aprovada pelo TRE-MG',
-      },
-      {
-        id: 'cand-mg-branco',
-        name: 'Voto em Branco ou Nulo',
-        popularName: 'Branco / Nulo',
-        number: '000',
-        party: 'Nenhum',
-        photoUrl: '/images/politicians/branco-nulo.svg',
-        votes: 780,
       }
     ]
   }

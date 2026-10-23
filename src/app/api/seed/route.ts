@@ -109,6 +109,13 @@ export async function GET() {
 
     if (pollError) throw pollError;
 
+    // Remove pesquisas legadas que não pertencem ao 2º Turno (ex: Senado)
+    const validPollIds = INITIAL_POLLS.map(p => p.id);
+    await supabase
+      .from('election_polls')
+      .delete()
+      .not('id', 'in', `(${validPollIds.join(',')})`);
+
     return NextResponse.json({
       success: true,
       message: 'Dados carregados com sucesso no Supabase!',
