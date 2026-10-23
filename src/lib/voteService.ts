@@ -209,37 +209,36 @@ export async function registrarVotoSeguro(payload: VoteSubmissionPayload): Promi
     timestampQuarterHour: timeCluster,
   };
 
-  // Persistência com integridade local
+  // 3. Persistência na Nuvem via /api/vote/cast (com permissões administrativas seguras)
+  try {
+    const res = await fetch('/api/vote/cast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const result = await res.json();
+    if (!res.ok || !result.success) {
+      if (result.message && (result.message.includes('já registrou') || result.message.includes('inválido'))) {
+        return {
+          success: false,
+          message: result.message,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('API /api/vote/cast em modo offline / fallback:', err);
+  }
+
+  // 4. Persistência com integridade local (offline-first & feedback imediato)
   const currentVoters = getVotersRegistry();
-  currentVoters.push(voterRecord);
-  localStorage.setItem(VOTERS_STORAGE_KEY, JSON.stringify(currentVoters));
+  if (!currentVoters.some(v => v.cpfHash === cpfHash && v.pollId === pollId)) {
+    currentVoters.push(voterRecord);
+    localStorage.setItem(VOTERS_STORAGE_KEY, JSON.stringify(currentVoters));
+  }
 
   const currentBallots = getAnonymousBallots();
   currentBallots.push(anonymousBallot);
   localStorage.setItem(BALLOTS_STORAGE_KEY, JSON.stringify(currentBallots));
-
-  // Persistência no banco Supabase (direto nas tabelas da nuvem)
-  try {
-    const { supabase } = await import('./supabase');
-    await supabase.from('voters_registry').insert({
-      name: voter.nome,
-      cpf_masked: mascararCPF(voter.cpf),
-      cpf_hash: cpfHash,
-      email: voter.email || null,
-      phone: voter.phone || null,
-      state: voter.uf,
-      city: voter.cidade,
-      has_voted: true,
-      poll_id: pollId,
-    });
-    await supabase.from('poll_votes').insert({
-      poll_id: pollId,
-      candidate_id: candidateId,
-      voter_hash: cpfHash,
-    });
-  } catch {
-    // Fallback silencioso para garantir funcionamento offline
-  }
 
   return {
     success: true,

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
-import { validarCPF, mascararCPF } from '@/lib/voteService';
+import { validarCPF, mascararCPF, gerarHashEleitor } from '@/lib/voteService';
 
 // CPFs com permissão de superusuário / administração da plataforma
 const ADMIN_MASTER_CPFS = ['22487527846'];
@@ -60,8 +60,8 @@ export async function POST(request: Request) {
         .order('created_at', { ascending: false })
         .limit(1);
 
-      if (error) {
-        // Se for o gestor oficial da plataforma, garante acesso imediato mesmo com oscilação da nuvem
+      if (error || !data || data.length === 0) {
+        // Se for o gestor oficial da plataforma, garante acesso imediato
         if (isMasterAdmin) {
           return NextResponse.json({
             success: true,
@@ -84,41 +84,33 @@ export async function POST(request: Request) {
           });
         }
 
-        let friendlyMessage = 'O serviço de auditoria em nuvem está passando por uma sincronização temporária. Por favor, tente novamente em alguns segundos.';
-        if (error.message.includes('schema cache') || error.message.includes('voters_registry') || error.message.includes('relation')) {
-          friendlyMessage = 'A infraestrutura de auditoria segura está sendo inicializada na nuvem. Seus dados estão seguros.';
-        }
+        // Verifica se o eleitor registrou voto na urna cega (tabela poll_votes)
+        const cpfHash = await gerarHashEleitor(cleanCPF, 'eleicao-presidencia-2026');
+        const { data: realBallots } = await supabase
+          .from('poll_votes')
+          .select('*')
+          .eq('voter_hash', cpfHash)
+          .limit(1);
 
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: friendlyMessage,
-            rawError: error.message 
-          },
-          { status: 500 }
-        );
-      }
-
-      if (!data || data.length === 0) {
-        // Se for o gestor oficial da plataforma, cria a sessão de administrador automaticamente
-        if (isMasterAdmin) {
+        if (realBallots && realBallots.length > 0) {
+          const ballot = realBallots[0];
           return NextResponse.json({
             success: true,
-            role: 'admin',
-            is_admin: true,
+            role: 'voter',
+            is_admin: false,
             voter: {
-              id: 'admin-master-voter',
-              name: 'Diretor / Gestor Cívico Oficial',
+              id: ballot.id,
+              name: 'Eleitor Cívico Auditado',
               cpf_masked: masked,
-              cpf_hash: 'hash_fatosfakes_admin_master_22487527846',
-              email: 'diretoria@fatosfakes2026.org',
-              phone: '(11) 98888-2026',
+              cpf_hash: cpfHash,
+              email: '',
+              phone: '',
               state: 'SP',
               city: 'São Paulo',
               has_voted: true,
-              poll_id: 'eleicao-presidencia-2026',
-              created_at: new Date().toISOString(),
-              is_admin: true,
+              poll_id: ballot.poll_id || 'eleicao-presidencia-2026',
+              created_at: ballot.created_at || new Date().toISOString(),
+              is_audit_record: true,
             },
           });
         }
@@ -128,7 +120,7 @@ export async function POST(request: Request) {
             success: false,
             notFound: true,
             error: 'Não localizamos um voto registrado para este CPF. Para ativar seu cadastro cívico e receber seu comprovante de presença auditável, participe da pesquisa presidencial na página inicial.',
-            rawError: 'Voter not found in voters_registry',
+            rawError: error ? error.message : 'Voter not found in voters_registry or poll_votes',
           },
           { status: 404 }
         );

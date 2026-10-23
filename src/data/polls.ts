@@ -10,7 +10,7 @@ export const INITIAL_POLLS: ElectionPoll[] = [
     year: 2026,
     description: 'Enquete cívica auditada com voto secreto por CPF único. Disputa oficial do 2º Turno entre os dois finalistas para a Presidência da República.',
     status: 'ABERTA',
-    totalVotes: 12280,
+    totalVotes: 2,
     candidates: [
       {
         id: 'cand-lula',
@@ -20,7 +20,7 @@ export const INITIAL_POLLS: ElectionPoll[] = [
         party: 'PT',
         photoUrl: '/images/politicians/lula.jpg',
         politicianId: 'lula',
-        votes: 6240,
+        votes: 1,
         judicialStatusSummary: 'Processos da Lava Jato anulados pelo STF · Ficha Limpa apto',
       },
       {
@@ -31,7 +31,7 @@ export const INITIAL_POLLS: ElectionPoll[] = [
         party: 'PL',
         photoUrl: '/images/politicians/flavio-bolsonaro.jpg',
         politicianId: 'flavio-bolsonaro',
-        votes: 4890,
+        votes: 1,
         judicialStatusSummary: 'Ficha Limpa apto · Processo criminal da Alerj arquivado pelo TJ-RJ sem julgamento de mérito',
       },
       {
@@ -41,7 +41,7 @@ export const INITIAL_POLLS: ElectionPoll[] = [
         number: '00',
         party: 'Nenhum',
         photoUrl: '/images/politicians/branco-nulo.svg',
-        votes: 1150,
+        votes: 0,
       }
     ]
   },
@@ -54,7 +54,7 @@ export const INITIAL_POLLS: ElectionPoll[] = [
     year: 2026,
     description: 'Levantamento oficial de 2º Turno para o Palácio dos Bandeirantes com checagem de fatos e situação judicial cruzada.',
     status: 'ABERTA',
-    totalVotes: 10350,
+    totalVotes: 0,
     candidates: [
       {
         id: 'cand-sp-tarcisio',
@@ -64,7 +64,7 @@ export const INITIAL_POLLS: ElectionPoll[] = [
         party: 'Republicanos',
         photoUrl: '/images/politicians/tarcisio-de-freitas.jpg',
         politicianId: 'tarcisio-de-freitas',
-        votes: 5320,
+        votes: 0,
         judicialStatusSummary: 'Contas aprovadas no TSE · Sem condenações',
       },
       {
@@ -75,7 +75,7 @@ export const INITIAL_POLLS: ElectionPoll[] = [
         party: 'PSOL',
         photoUrl: '/images/politicians/guilherme-boulos.jpg',
         politicianId: 'guilherme-boulos',
-        votes: 3950,
+        votes: 0,
         judicialStatusSummary: 'Representações eleitorais extintas · Ficha Limpa apto',
       },
       {
@@ -85,7 +85,7 @@ export const INITIAL_POLLS: ElectionPoll[] = [
         number: '00',
         party: 'Nenhum',
         photoUrl: '/images/politicians/branco-nulo.svg',
-        votes: 1080,
+        votes: 0,
       }
     ]
   }
