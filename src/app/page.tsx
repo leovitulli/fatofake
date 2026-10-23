@@ -505,11 +505,6 @@ export default function HomePage() {
           </div>
         )}
 
-        {/* SEÇÃO DE APOIO CÍVICO VIA PIX */}
-        <div className="pt-8">
-          <PixDonationSection id="apoie-via-pix" />
-        </div>
-
       </main>
 
       {/* Rodapé Cívico Institucional */}

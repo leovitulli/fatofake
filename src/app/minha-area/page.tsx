@@ -7,8 +7,6 @@ import {
   ShieldCheck, 
   Lock, 
   KeyRound, 
-  Eye, 
-  EyeOff, 
   Users, 
   Vote, 
   CheckCircle2, 
@@ -65,6 +63,7 @@ interface VoterData {
   pollId?: string;
   created_at?: string;
   registeredAt?: string;
+  is_admin?: boolean;
 }
 
 const BRAZIL_STATES = [
@@ -102,12 +101,6 @@ function MinhaAreaContent() {
   const [profileSuccessMsg, setProfileSuccessMsg] = useState('');
   const [profileErrorMsg, setProfileErrorMsg] = useState('');
 
-  // Modal Interno de Chave de Governança (Desbloqueio de Gestão dentro do Perfil)
-  const [showAdminKeyModal, setShowAdminKeyModal] = useState(false);
-  const [adminKeyInput, setAdminKeyInput] = useState('');
-  const [adminKeyError, setAdminKeyError] = useState('');
-  const [showKeyText, setShowKeyText] = useState(false);
-
   // Gestão Administrativa & Tabela de Eleitores
   const [votersList, setVotersList] = useState<VoterData[]>([]);
   const [isLoadingAdminData, setIsLoadingAdminData] = useState(false);
@@ -131,20 +124,12 @@ function MinhaAreaContent() {
   const [isSavingPix, setIsSavingPix] = useState(false);
   const [pixFeedback, setPixFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  const DEFAULT_ADMIN_PASS = 'admin@fatosfakes2026';
+  // CPF do desenvolvedor / administrador exclusivo (configurável via .env)
+  const DEVELOPER_ADMIN_CPF = (process.env.NEXT_PUBLIC_ADMIN_CPF || '22487527846').replace(/\D/g, '');
 
-  // Helper para verificar se um CPF está autorizado como gestor
+  // Helper para verificar se um CPF é estritamente o do desenvolvedor/administrador
   const checkIsAdminCpf = (cleanCpf: string): boolean => {
-    if (cleanCpf === '22487527846') return true;
-    if (typeof window === 'undefined') return false;
-    try {
-      const savedAdminCpfs: string[] = JSON.parse(localStorage.getItem('fatosfakes_admin_cpfs') || '[]');
-      if (savedAdminCpfs.includes(cleanCpf)) return true;
-      if (sessionStorage.getItem('fatosfakes_admin_auth_token')) return true;
-      return false;
-    } catch {
-      return false;
-    }
+    return cleanCpf === DEVELOPER_ADMIN_CPF;
   };
 
   // Handler para acionar a validação cívica do hash na urna cega
@@ -242,23 +227,15 @@ function MinhaAreaContent() {
           setCurrentUserRole('voter');
           initVoterProfile(parsed);
 
-          // Verifica se esse CPF tem privilégio de gestão
+          // Verifica se esse CPF tem privilégio exclusivo de gestão (apenas o desenvolvedor oficial)
           const clean = (parsed.cpf_masked || parsed.cpfMasked || '').replace(/\D/g, '');
-          const hasAdminAccess = checkIsAdminCpf(clean) || Boolean(sessionStorage.getItem('fatosfakes_admin_auth_token'));
-          if (hasAdminAccess) {
+          if (checkIsAdminCpf(clean)) {
             setIsSuperUser(true);
-            loadAdminVotersData();
+            loadAdminVotersData(clean);
           }
         }
       } catch {
         // ignore
-      }
-    } else {
-      // Se havia token de admin salvo anteriormente
-      const savedAdminToken = sessionStorage.getItem('fatosfakes_admin_auth_token') || localStorage.getItem('fatosfakes_admin_auth_token');
-      if (savedAdminToken) {
-        setIsSuperUser(true);
-        loadAdminVotersData();
       }
     }
 
@@ -278,7 +255,7 @@ function MinhaAreaContent() {
     setIsSavingPix(true);
     setPixFeedback(null);
 
-    const token = sessionStorage.getItem('fatosfakes_admin_auth_token') || DEFAULT_ADMIN_PASS;
+    const token = DEVELOPER_ADMIN_CPF;
     const result = await savePixSettings({
       enabled: targetVal,
       chave: pixKeyInput.trim(),
@@ -309,7 +286,7 @@ function MinhaAreaContent() {
     setIsSavingPix(true);
     setPixFeedback(null);
 
-    const token = sessionStorage.getItem('fatosfakes_admin_auth_token') || DEFAULT_ADMIN_PASS;
+    const token = DEVELOPER_ADMIN_CPF;
     const result = await savePixSettings({
       enabled: pixEnabled,
       chave: pixKeyInput.trim(),
@@ -342,11 +319,11 @@ function MinhaAreaContent() {
   };
 
   // Carrega dados para a Gestão
-  const loadAdminVotersData = async () => {
+  const loadAdminVotersData = async (adminCpf?: string) => {
     setIsLoadingAdminData(true);
-    const token = sessionStorage.getItem('fatosfakes_admin_auth_token') || DEFAULT_ADMIN_PASS;
+    const token = adminCpf || DEVELOPER_ADMIN_CPF;
     try {
-      const res = await fetch(`/api/admin/voters?key=${encodeURIComponent(token)}`, {
+      const res = await fetch(`/api/admin/voters?cpf=${encodeURIComponent(token)}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -414,20 +391,21 @@ function MinhaAreaContent() {
 
       if (res.ok && data.success && data.voter) {
         targetVoter = data.voter;
-      } else if (cleanCpf === '22487527846') {
-        // Contingência imediata de acesso para o Gestor / Diretor da plataforma
+      } else if (checkIsAdminCpf(cleanCpf)) {
+        // Acesso exclusivo do desenvolvedor / administrador oficial da plataforma
         targetVoter = {
           id: 'admin-master-voter',
-          name: 'Diretor / Gestor Cívico Oficial',
+          name: 'Desenvolvedor / Administrador',
           cpf_masked: mascararCPF(cleanCpf),
-          cpf_hash: 'hash_fatosfakes_admin_master_22487527846',
-          email: 'diretoria@fatosfakes2026.org',
-          phone: '(11) 98888-2026',
-          state: 'SP',
-          city: 'São Paulo',
+          cpf_hash: 'hash_fatosfakes_admin_' + cleanCpf,
+          email: 'admin@fatosfakes2026.org',
+          phone: '',
+          state: 'BR',
+          city: 'Painel Central',
           has_voted: true,
           poll_id: 'eleicao-presidencia-2026',
           created_at: new Date().toISOString(),
+          is_admin: true,
         };
       } else {
         // Fallback no armazenamento local do navegador
@@ -457,12 +435,11 @@ function MinhaAreaContent() {
         setCurrentUserRole('voter');
         sessionStorage.setItem('fatosfakes_voter_session', JSON.stringify(targetVoter));
 
-        // Checa se este CPF é o gestor
-        const isAuthorized = checkIsAdminCpf(cleanCpf) || Boolean(sessionStorage.getItem('fatosfakes_admin_auth_token'));
-        if (isAuthorized) {
+        // Checa se este CPF é o desenvolvedor/gestor exclusivo
+        if (checkIsAdminCpf(cleanCpf)) {
           setIsSuperUser(true);
-          sessionStorage.setItem('fatosfakes_admin_auth_token', 'token_diretor_master_2026');
-          loadAdminVotersData();
+          sessionStorage.setItem('fatosfakes_admin_auth_token', cleanCpf);
+          loadAdminVotersData(cleanCpf);
         }
       } else {
         const rawErr = data?.rawError || data?.error || 'Registro cívico não localizado para este CPF';
@@ -498,30 +475,31 @@ function MinhaAreaContent() {
 
         if (checkIsAdminCpf(cleanCpf)) {
           setIsSuperUser(true);
-          sessionStorage.setItem('fatosfakes_admin_auth_token', 'token_diretor_master_2026');
-          loadAdminVotersData();
+          sessionStorage.setItem('fatosfakes_admin_auth_token', cleanCpf);
+          loadAdminVotersData(cleanCpf);
         }
-      } else if (cleanCpf === '22487527846') {
+      } else if (checkIsAdminCpf(cleanCpf)) {
         const adminVoter: VoterData = {
           id: 'admin-master-voter',
-          name: 'Diretor / Gestor Cívico Oficial',
+          name: 'Desenvolvedor / Administrador',
           cpf_masked: masked,
-          cpf_hash: 'hash_fatosfakes_admin_master_22487527846',
-          email: 'diretoria@fatosfakes2026.org',
-          phone: '(11) 98888-2026',
-          state: 'SP',
-          city: 'São Paulo',
+          cpf_hash: 'hash_fatosfakes_admin_' + cleanCpf,
+          email: 'admin@fatosfakes2026.org',
+          phone: '',
+          state: 'BR',
+          city: 'Painel Central',
           has_voted: true,
           poll_id: 'eleicao-presidencia-2026',
           created_at: new Date().toISOString(),
+          is_admin: true,
         };
         setVoterProfile(adminVoter);
         initVoterProfile(adminVoter);
         setCurrentUserRole('voter');
         setIsSuperUser(true);
         sessionStorage.setItem('fatosfakes_voter_session', JSON.stringify(adminVoter));
-        sessionStorage.setItem('fatosfakes_admin_auth_token', 'token_diretor_master_2026');
-        loadAdminVotersData();
+        sessionStorage.setItem('fatosfakes_admin_auth_token', cleanCpf);
+        loadAdminVotersData(cleanCpf);
       } else {
         setRawErrorDetail(fetchErr?.message || 'Falha de conexão com o servidor');
         setVoterError('O serviço de consulta está momentaneamente instável. Por favor, tente novamente em alguns instantes.');
@@ -589,35 +567,6 @@ function MinhaAreaContent() {
     }
   };
 
-  // 3. VINCULAR CPF COMO ADMINISTRADOR (DENTRO DO PERFIL)
-  const handleAuthorizeAdminCpf = (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminKeyError('');
-
-    if (adminKeyInput.trim() !== DEFAULT_ADMIN_PASS) {
-      setAdminKeyError('Chave de governança incorreta.');
-      return;
-    }
-
-    if (!voterProfile) return;
-
-    const clean = (voterProfile.cpf_masked || voterProfile.cpfMasked || '').replace(/\D/g, '');
-    const currentAdminCpfs: string[] = JSON.parse(localStorage.getItem('fatosfakes_admin_cpfs') || '[]');
-    
-    if (clean && !currentAdminCpfs.includes(clean)) {
-      currentAdminCpfs.push(clean);
-      localStorage.setItem('fatosfakes_admin_cpfs', JSON.stringify(currentAdminCpfs));
-    }
-
-    sessionStorage.setItem('fatosfakes_admin_auth_token', DEFAULT_ADMIN_PASS);
-    localStorage.setItem('fatosfakes_admin_auth_token', DEFAULT_ADMIN_PASS);
-
-    setIsSuperUser(true);
-    setShowAdminKeyModal(false);
-    setAdminKeyInput('');
-    loadAdminVotersData();
-    setActivePortalTab('management');
-  };
 
   // Logout
   const handleLogout = () => {
@@ -888,11 +837,6 @@ function MinhaAreaContent() {
                   </p>
                 </div>
               </div>
-            </div>
-
-            {/* Espaço de Apoio Cívico via PIX */}
-            <div className="mt-8">
-              <PixDonationSection id="apoie-via-pix-cadastro" />
             </div>
 
           </div>
@@ -1167,22 +1111,11 @@ function MinhaAreaContent() {
                 <Shield className="w-3.5 h-3.5 text-slate-600" />
                 <span>Auditoria Cívica Paritária · Urna Cega Zero-Knowledge</span>
               </div>
-
-              {!isSuperUser && (
-                <button
-                  onClick={() => setShowAdminKeyModal(true)}
-                  className="text-slate-600 hover:text-slate-400 transition-colors flex items-center gap-1 text-[11px] p-1"
-                  title="Acesso de Governança Interna"
-                >
-                  <Lock className="w-3 h-3" />
-                  <span>Acesso Interno</span>
-                </button>
-              )}
             </div>
 
-            {/* Espaço de Apoio Cívico via PIX */}
-            <div className="pt-4">
-              <PixDonationSection id="apoie-via-pix-eleitor" />
+            {/* Espaço de Apoio Cívico Discreto via PIX */}
+            <div className="pt-2">
+              <PixDonationSection id="apoie-via-pix-eleitor" compact={true} />
             </div>
 
           </div>
@@ -1358,7 +1291,7 @@ function MinhaAreaContent() {
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={loadAdminVotersData}
+                    onClick={() => loadAdminVotersData()}
                     disabled={isLoadingAdminData}
                     className="py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors"
                   >
@@ -1503,72 +1436,6 @@ function MinhaAreaContent() {
         )}
 
       </main>
-
-      {/* MODAL DISCRETO PARA VINCULAR CPF COMO ADMINISTRADOR */}
-      {showAdminKeyModal && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0b1524] border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
-            <div className="flex items-center gap-2 mb-2 text-cyan-400 text-xs font-bold uppercase tracking-wider">
-              <Compass className="w-4 h-4" />
-              <span>Autenticação de Governança Interna</span>
-            </div>
-            <h3 className="text-lg font-black text-white">
-              Vincular Privilégio de Gestão ao seu CPF
-            </h3>
-            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-              Informe a chave mestra para autorizar permanentemente o CPF de <strong>{voterProfile?.name}</strong> como gestor da plataforma. A partir de então, você acessará a gestão automaticamente com o seu CPF.
-            </p>
-
-            <form onSubmit={handleAuthorizeAdminCpf} className="mt-5 space-y-4">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                  Chave Mestra de Gestão
-                </label>
-                <div className="relative">
-                  <input
-                    type={showKeyText ? 'text' : 'password'}
-                    value={adminKeyInput}
-                    onChange={(e) => setAdminKeyInput(e.target.value)}
-                    placeholder="Digite a chave mestra..."
-                    className="w-full bg-[#080e18] border border-slate-700 focus:border-cyan-500 rounded-xl px-4 py-2.5 pr-11 text-white text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500"
-                    autoFocus
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowKeyText(!showKeyText)}
-                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
-                  >
-                    {showKeyText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
-
-              {adminKeyError && (
-                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                  <span>{adminKeyError}</span>
-                </div>
-              )}
-
-              <div className="flex items-center justify-end gap-2.5 pt-2">
-                <button
-                  type="button"
-                  onClick={() => { setShowAdminKeyModal(false); setAdminKeyInput(''); setAdminKeyError(''); }}
-                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-semibold transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md"
-                >
-                  Confirmar e Ativar Gestão
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Modal de Auditoria e Validação Cívica de Hash */}
       {showHashAuditModal && (

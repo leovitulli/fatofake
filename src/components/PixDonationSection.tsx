@@ -59,6 +59,72 @@ export function PixDonationSection({ id = 'apoie-via-pix', className = '', compa
     return null;
   }
 
+  const currentKey = pixSettings.chave || PIX_CONFIG.chave;
+  const currentKeyType = pixSettings.tipoChave || PIX_CONFIG.tipoChave;
+  const currentTitular = pixSettings.titular || PIX_CONFIG.titular;
+
+  // Modo discreto / compacto para o Perfil Cívico do Eleitor
+  if (compact) {
+    return (
+      <section id={id} className={`transition-all duration-300 ${className}`}>
+        <div className="rounded-2xl bg-[#0b1524]/60 border border-slate-800/80 p-4 sm:p-5 shadow-sm">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800/60">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+                <Heart className="w-3.5 h-3.5 text-emerald-400 fill-emerald-400/20" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-200">
+                  Apoio Cívico à Manutenção (Opcional)
+                </h4>
+                <p className="text-[11px] text-slate-400">
+                  Projeto autônomo sem financiamento partidário ou verbas públicas.
+                </p>
+              </div>
+            </div>
+            <div className="text-[11px] text-slate-500 font-mono">
+              Chave: <span className="text-slate-300 uppercase">{currentKeyType}</span>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <div className="flex-1 bg-[#060c16] border border-slate-800 rounded-xl px-3.5 py-2 font-mono text-xs text-emerald-300 select-all overflow-x-auto whitespace-nowrap">
+              {currentKey}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleCopyPix}
+              className={`px-4 py-2 rounded-xl font-bold text-xs transition-all shadow-sm flex items-center justify-center gap-1.5 shrink-0 cursor-pointer ${
+                copied
+                  ? 'bg-emerald-500 text-slate-950'
+                  : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 active:scale-95'
+              }`}
+              title="Copiar Chave PIX"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 stroke-[3]" />
+                  <span>Copiada!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Copiar PIX</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between text-[10px] text-slate-500">
+            <span>Titular: {currentTitular}</span>
+            <span>Destinação: Infraestrutura de servidores &amp; apuração</span>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section 
       id={id} 

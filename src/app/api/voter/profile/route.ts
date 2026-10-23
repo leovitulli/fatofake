@@ -2,25 +2,13 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { validarCPF, mascararCPF, gerarHashEleitor } from '@/lib/voteService';
 
-// CPFs com permissão de superusuário / administração da plataforma
-const ADMIN_MASTER_CPFS = ['22487527846'];
+// CPF do desenvolvedor/administrador exclusivo da plataforma (lido do .env.local)
+const DEVELOPER_ADMIN_CPF = (process.env.ADMIN_DEVELOPER_CPF || process.env.NEXT_PUBLIC_ADMIN_CPF || '22487527846').replace(/\D/g, '');
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { cpf, adminKey } = body;
-
-    const defaultAdminPass = process.env.ADMIN_PASSWORD || 'admin@fatosfakes2026';
-
-    // 1. Verificação se é login direto por chave administrativa
-    if (adminKey && adminKey === defaultAdminPass) {
-      return NextResponse.json({
-        success: true,
-        role: 'admin',
-        is_admin: true,
-        message: 'Acesso Administrativo autorizado.',
-      });
-    }
+    const { cpf } = body;
 
     // 2. Verificação de login de Cidadão / Eleitor por CPF
     if (!cpf) {
@@ -47,7 +35,7 @@ export async function POST(request: Request) {
     }
 
     const masked = mascararCPF(cleanCPF);
-    const isMasterAdmin = ADMIN_MASTER_CPFS.includes(cleanCPF);
+    const isMasterAdmin = cleanCPF === DEVELOPER_ADMIN_CPF;
 
     try {
       const supabase = getSupabaseAdmin();
@@ -61,21 +49,22 @@ export async function POST(request: Request) {
         .limit(1);
 
       if (error || !data || data.length === 0) {
-        // Se for o gestor oficial da plataforma, garante acesso imediato
+        // Se for o desenvolvedor oficial da plataforma, garante acesso exclusivo imediato
         if (isMasterAdmin) {
+          const adminHash = await gerarHashEleitor(cleanCPF, 'eleicao-presidencia-2026');
           return NextResponse.json({
             success: true,
             role: 'admin',
             is_admin: true,
             voter: {
               id: 'admin-master-voter',
-              name: 'Diretor / Gestor Cívico Oficial',
+              name: 'Desenvolvedor / Administrador',
               cpf_masked: masked,
-              cpf_hash: 'hash_fatosfakes_admin_master_22487527846',
-              email: 'diretoria@fatosfakes2026.org',
-              phone: '(11) 98888-2026',
-              state: 'SP',
-              city: 'São Paulo',
+              cpf_hash: adminHash,
+              email: 'admin@fatosfakes2026.org',
+              phone: '',
+              state: 'BR',
+              city: 'Painel Central',
               has_voted: true,
               poll_id: 'eleicao-presidencia-2026',
               created_at: new Date().toISOString(),
