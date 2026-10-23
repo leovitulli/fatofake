@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Heart, 
   Copy, 
@@ -16,6 +16,7 @@ import {
   Info
 } from 'lucide-react';
 import { PIX_CONFIG } from '@/config/pixConfig';
+import { PixSettings, getLocalPixSettings, fetchRemotePixSettings } from '@/lib/pixService';
 
 interface PixDonationSectionProps {
   id?: string;
@@ -26,14 +27,37 @@ interface PixDonationSectionProps {
 export function PixDonationSection({ id = 'apoie-via-pix', className = '', compact = false }: PixDonationSectionProps) {
   const [copied, setCopied] = useState(false);
   const [selectedTier, setSelectedTier] = useState<string | null>(null);
+  const [pixSettings, setPixSettings] = useState<PixSettings>(getLocalPixSettings());
+
+  useEffect(() => {
+    // Sincroniza configurações dinâmicas da plataforma
+    fetchRemotePixSettings().then(setPixSettings);
+
+    // Escuta evento em tempo real se o gestor alterar o switch ou a chave
+    const handleUpdated = (e: Event) => {
+      const custom = e as CustomEvent<PixSettings>;
+      if (custom.detail) {
+        setPixSettings(custom.detail);
+      }
+    };
+
+    window.addEventListener('fatosfakes_pix_updated', handleUpdated);
+    return () => window.removeEventListener('fatosfakes_pix_updated', handleUpdated);
+  }, []);
 
   const handleCopyPix = () => {
+    const keyToCopy = pixSettings.chave || PIX_CONFIG.chave;
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(PIX_CONFIG.chave);
+      navigator.clipboard.writeText(keyToCopy);
       setCopied(true);
       setTimeout(() => setCopied(false), 4000);
     }
   };
+
+  // Se o gestor desabilitou o PIX na plataforma, a seção inteira é omitida
+  if (!pixSettings.enabled) {
+    return null;
+  }
 
   return (
     <section 
@@ -90,13 +114,13 @@ export function PixDonationSection({ id = 'apoie-via-pix', className = '', compa
               <div className="flex items-center justify-between text-xs mb-2">
                 <span className="text-slate-400 font-medium">Chave PIX Oficial:</span>
                 <span className="text-emerald-400 font-semibold text-[11px] uppercase tracking-wider">
-                  {PIX_CONFIG.tipoChave}
+                  {pixSettings.tipoChave || PIX_CONFIG.tipoChave}
                 </span>
               </div>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                 <div className="flex-1 bg-slate-900 border border-slate-700/80 rounded-xl px-4 py-3 font-mono text-sm sm:text-base font-bold text-emerald-300 select-all overflow-x-auto whitespace-nowrap">
-                  {PIX_CONFIG.chave}
+                  {pixSettings.chave || PIX_CONFIG.chave}
                 </div>
 
                 <button
@@ -134,10 +158,10 @@ export function PixDonationSection({ id = 'apoie-via-pix', className = '', compa
               {/* Metadados bancários de transparência */}
               <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
                 <div>
-                  <strong className="text-slate-300">Titular:</strong> {PIX_CONFIG.titular}
+                  <strong className="text-slate-300">Titular:</strong> {pixSettings.titular || PIX_CONFIG.titular}
                 </div>
                 <div>
-                  <strong className="text-slate-300">Destinação:</strong> {PIX_CONFIG.proposito}
+                  <strong className="text-slate-300">Destinação:</strong> {pixSettings.proposito || PIX_CONFIG.proposito}
                 </div>
               </div>
             </div>

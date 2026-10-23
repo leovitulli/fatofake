@@ -32,7 +32,8 @@ import {
   Compass,
   FileCheck,
   ChevronRight,
-  Send
+  Send,
+  Heart
 } from 'lucide-react';
 import { 
   validarCPF, 
@@ -45,6 +46,7 @@ import {
 import { INITIAL_POLLS } from '@/data/polls';
 import { GeolocatedReportView } from '@/components/GeolocatedReportView';
 import { PixDonationSection } from '@/components/PixDonationSection';
+import { fetchRemotePixSettings, savePixSettings } from '@/lib/pixService';
 
 interface VoterData {
   id?: string;
@@ -119,6 +121,15 @@ function MinhaAreaContent() {
   const [isVerifyingHash, setIsVerifyingHash] = useState(false);
   const [auditVerificationResult, setAuditVerificationResult] = useState<any | null>(null);
   const [auditError, setAuditError] = useState('');
+
+  // Controle de Financiamento Cívico (Apoio via PIX)
+  const [pixEnabled, setPixEnabled] = useState(true);
+  const [pixKeyInput, setPixKeyInput] = useState('');
+  const [pixKeyType, setPixKeyType] = useState('E-mail / Chave Cadastrada');
+  const [pixTitular, setPixTitular] = useState('');
+  const [pixProposito, setPixProposito] = useState('');
+  const [isSavingPix, setIsSavingPix] = useState(false);
+  const [pixFeedback, setPixFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   const DEFAULT_ADMIN_PASS = 'admin@fatosfakes2026';
 
@@ -250,7 +261,77 @@ function MinhaAreaContent() {
         loadAdminVotersData();
       }
     }
+
+    // Carrega configurações dinâmicas do PIX
+    fetchRemotePixSettings().then(cfg => {
+      setPixEnabled(cfg.enabled);
+      setPixKeyInput(cfg.chave);
+      setPixKeyType(cfg.tipoChave || 'E-mail / Chave Cadastrada');
+      setPixTitular(cfg.titular || 'FATOS & FAKES · Projeto Cívico Independente');
+      setPixProposito(cfg.proposito || 'Manutenção de servidores, banco de dados auditável e apuração cívica 100% independente.');
+    });
   }, []);
+
+  // Handlers para controle do PIX diretamente pela plataforma
+  const handleTogglePix = async (targetVal: boolean) => {
+    setPixEnabled(targetVal);
+    setIsSavingPix(true);
+    setPixFeedback(null);
+
+    const token = sessionStorage.getItem('fatosfakes_admin_auth_token') || DEFAULT_ADMIN_PASS;
+    const result = await savePixSettings({
+      enabled: targetVal,
+      chave: pixKeyInput.trim(),
+      tipoChave: pixKeyType,
+      titular: pixTitular.trim(),
+      proposito: pixProposito.trim(),
+    }, token);
+
+    setIsSavingPix(false);
+    if (result.success) {
+      setPixFeedback({
+        type: 'success',
+        message: targetVal 
+          ? 'Financiamento via PIX ATIVADO com sucesso! A seção está visível para todo o público.' 
+          : 'Financiamento via PIX DESATIVADO com sucesso! A seção agora está oculta no site.',
+      });
+      setTimeout(() => setPixFeedback(null), 5000);
+    } else {
+      setPixFeedback({
+        type: 'error',
+        message: result.error || 'Erro ao atualizar status do PIX.',
+      });
+    }
+  };
+
+  const handleSavePixFull = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingPix(true);
+    setPixFeedback(null);
+
+    const token = sessionStorage.getItem('fatosfakes_admin_auth_token') || DEFAULT_ADMIN_PASS;
+    const result = await savePixSettings({
+      enabled: pixEnabled,
+      chave: pixKeyInput.trim(),
+      tipoChave: pixKeyType,
+      titular: pixTitular.trim(),
+      proposito: pixProposito.trim(),
+    }, token);
+
+    setIsSavingPix(false);
+    if (result.success) {
+      setPixFeedback({
+        type: 'success',
+        message: 'Configurações do PIX salvas com sucesso!',
+      });
+      setTimeout(() => setPixFeedback(null), 5000);
+    } else {
+      setPixFeedback({
+        type: 'error',
+        message: result.error || 'Erro ao salvar configurações do PIX.',
+      });
+    }
+  };
 
   const initVoterProfile = (data: VoterData) => {
     setVoterProfile(data);
@@ -1119,6 +1200,147 @@ function MinhaAreaContent() {
               activePoll={INITIAL_POLLS[0]} 
               onExportCSV={handleExportCSV} 
             />
+
+            {/* CARD DE GESTÃO DO PIX (HABILITAR / DESABILITAR & EDITAR CHAVE) */}
+            <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Heart className="w-5 h-5 text-emerald-400 fill-emerald-400/20" />
+                    <h3 className="text-lg font-bold text-white">
+                      Controle do Financiamento Cívico (Apoio via PIX)
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Ative ou desative a qualquer momento a exibição do card de apoio financeiro na página inicial e no portal.
+                  </p>
+                </div>
+
+                {/* Switch de Ativação Rápida */}
+                <div className="flex items-center gap-3 bg-[#080e18] px-4 py-2.5 rounded-xl border border-slate-800 shrink-0">
+                  <span className="text-xs font-bold text-slate-300">
+                    Status no Site:
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleTogglePix(!pixEnabled)}
+                    disabled={isSavingPix}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none cursor-pointer ${
+                      pixEnabled ? 'bg-emerald-500' : 'bg-slate-700'
+                    }`}
+                    title={pixEnabled ? 'Clique para Desativar' : 'Clique para Ativar'}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        pixEnabled ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                  <span className={`text-xs font-extrabold uppercase tracking-wider ${
+                    pixEnabled ? 'text-emerald-400' : 'text-slate-500'
+                  }`}>
+                    {pixEnabled ? 'Ativado' : 'Desativado'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Mensagem de Feedback */}
+              {pixFeedback && (
+                <div className={`p-3.5 rounded-xl text-xs flex items-center gap-2.5 animate-fadeIn ${
+                  pixFeedback.type === 'success' 
+                    ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-300' 
+                    : 'bg-rose-500/10 border border-rose-500/30 text-rose-300'
+                }`}>
+                  {pixFeedback.type === 'success' ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  )}
+                  <span>{pixFeedback.message}</span>
+                </div>
+              )}
+
+              {/* Formulário de Configuração da Chave */}
+              <form onSubmit={handleSavePixFull} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                  <div className="sm:col-span-7">
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Sua Chave PIX (E-mail, Celular, CPF, CNPJ ou Aleatória):
+                    </label>
+                    <input
+                      type="text"
+                      value={pixKeyInput}
+                      onChange={(e) => setPixKeyInput(e.target.value)}
+                      placeholder="Ex: sua-chave-pix@banco.com ou chave aleatória..."
+                      className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-emerald-300 font-mono focus:outline-none"
+                    />
+                    <p className="text-[10px] text-slate-500 mt-1">
+                      Você pode definir ou trocar a chave quando quiser por aqui, sem alterar código.
+                    </p>
+                  </div>
+
+                  <div className="sm:col-span-5">
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Tipo da Chave:
+                    </label>
+                    <select
+                      value={pixKeyType}
+                      onChange={(e) => setPixKeyType(e.target.value)}
+                      className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none"
+                    >
+                      <option value="E-mail / Chave Cadastrada">E-mail</option>
+                      <option value="Chave Aleatória (EVP)">Chave Aleatória (EVP)</option>
+                      <option value="Telefone / Celular">Telefone / WhatsApp</option>
+                      <option value="CPF / CNPJ">CPF / CNPJ</option>
+                    </select>
+                  </div>
+
+                  <div className="sm:col-span-6">
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Nome do Titular ou Razão Social:
+                    </label>
+                    <input
+                      type="text"
+                      value={pixTitular}
+                      onChange={(e) => setPixTitular(e.target.value)}
+                      placeholder="Ex: FATOS & FAKES · Projeto Cívico Independente"
+                      className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-6">
+                    <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                      Destinação / Propósito dos Recursos:
+                    </label>
+                    <input
+                      type="text"
+                      value={pixProposito}
+                      onChange={(e) => setPixProposito(e.target.value)}
+                      placeholder="Ex: Manutenção de servidores, banco de dados auditável e checagens."
+                      className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-slate-800/80">
+                  <span className="text-[11px] text-slate-400">
+                    Status atual na plataforma: <strong className={pixEnabled ? 'text-emerald-400' : 'text-slate-400'}>{pixEnabled ? '🟢 Ativado (Visível no site)' : '⚪ Desativado (Oculto)'}</strong>
+                  </span>
+                  <button
+                    type="submit"
+                    disabled={isSavingPix}
+                    className="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-xs tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer shrink-0"
+                  >
+                    {isSavingPix ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Save className="w-3.5 h-3.5" />
+                    )}
+                    <span>Salvar Configurações do PIX</span>
+                  </button>
+                </div>
+              </form>
+            </div>
 
             {/* TABELA DE AUDITORIA DE TODOS OS ELEITORES CADASTRADOS */}
             <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
