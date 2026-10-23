@@ -18,7 +18,7 @@ export function ClaimReviewSchema({ factCheck }: ClaimReviewSchemaProps) {
     '@context': 'https://schema.org',
     '@type': 'ClaimReview',
     datePublished: factCheck.publishedAt,
-    url: typeof window !== 'undefined' ? window.location.href : `https://fatosfakes.com.br/#check-${factCheck.id}`,
+    url: `https://fatosfakes.com.br/#check-${factCheck.id}`,
     claimReviewed: factCheck.title,
     itemReviewed: {
       '@type': 'Claim',
