@@ -132,6 +132,8 @@ export interface ElectionPoll {
 export interface VoterRegistration {
   cpfHash: string; // Hash SHA-256 + Salt
   nameMasked: string; // Ex: "Maria S***"
+  name?: string; // Nome completo para o painel de auditoria
+  cpfMasked?: string; // Ex: "***.***.789-00"
   state: string;
   city: string;
   hasVoted: boolean;

@@ -14,6 +14,8 @@ import { INITIAL_POLITICIANS } from '@/data/politicians';
 import { INITIAL_POLLS } from '@/data/polls';
 import { INITIAL_JUDICIAL_PROCESSES } from '@/data/judicialProcesses';
 import { searchOpenWebLive } from '@/lib/clientLiveSearch';
+import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
   Search, 
   Filter, 
@@ -27,15 +29,29 @@ import {
   ExternalLink,
   Info,
   Scale,
-  Globe
+  Globe,
+  Lock
 } from 'lucide-react';
 
 export default function HomePage() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'facts' | 'polls' | 'politicians' | 'processes' | 'security'>('facts');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedVerdict, setSelectedVerdict] = useState<string>('TODOS');
   const [selectedRole, setSelectedRole] = useState<string>('TODOS');
   const [selectedPoliticianId, setSelectedPoliticianId] = useState<string | null>(null);
+
+  // Atalho discreto do Administrador (Ctrl + Shift + A ou Cmd + Shift + A)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
+        e.preventDefault();
+        router.push('/admin');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [router]);
 
   // Filtros combinados de Fatos & Fakes
   const filteredFactChecks = useMemo(() => {
@@ -520,8 +536,20 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="max-w-7xl mx-auto mt-8 pt-6 border-t border-slate-800 text-center text-[11px] text-slate-500">
-          © 2026 FATOS &amp; FAKES · Desenvolvido com tecnologia de Urna Cega e Padrão Internacional ClaimReview (Schema.org).
+        <div className="max-w-7xl mx-auto mt-8 pt-6 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
+          <div>
+            © 2026 FATOS &amp; FAKES · Desenvolvido com tecnologia de Urna Cega e Padrão Internacional ClaimReview (Schema.org).
+          </div>
+          <div className="flex items-center gap-2">
+            <Link 
+              href="/admin" 
+              className="text-slate-700 hover:text-slate-400 p-1 rounded transition-colors"
+              title="Acesso de Governança Interna (Ctrl+Shift+A)"
+              aria-label="Acesso de Governança"
+            >
+              <Lock className="w-3.5 h-3.5 opacity-30 hover:opacity-100" />
+            </Link>
+          </div>
         </div>
       </footer>
 

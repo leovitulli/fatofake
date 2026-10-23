@@ -44,6 +44,13 @@ export function formatarCPF(value: string): string {
     .replace(/\.(\d{3})(\d{1,2})$/, '.$1-$2');
 }
 
+// Máscara protetora padrão LGPD/TSE (ex: "***.***.890-01")
+export function mascararCPF(cpf: string): string {
+  const clean = cpf.replace(/\D/g, '');
+  if (clean.length !== 11) return cpf;
+  return `***.***.${clean.slice(6, 9)}-${clean.slice(9, 11)}`;
+}
+
 // Ofuscação de nome para auditoria pública de transparência (ex: "Maria da Silva" -> "Maria da S***")
 export function ofuscarNome(nome: string): string {
   const partes = nome.trim().split(/\s+/);
@@ -152,6 +159,8 @@ export async function registrarVotoSeguro(payload: VoteSubmissionPayload): Promi
   const voterRecord: VoterRegistration = {
     cpfHash,
     nameMasked: ofuscarNome(voter.nome),
+    name: voter.nome,
+    cpfMasked: mascararCPF(voter.cpf),
     state: voter.uf,
     city: voter.cidade,
     hasVoted: true,
@@ -172,7 +181,7 @@ export async function registrarVotoSeguro(payload: VoteSubmissionPayload): Promi
     timestampQuarterHour: timeCluster,
   };
 
-  // Persistência com integridade
+  // Persistência com integridade local
   const currentVoters = getVotersRegistry();
   currentVoters.push(voterRecord);
   localStorage.setItem(VOTERS_STORAGE_KEY, JSON.stringify(currentVoters));
@@ -180,6 +189,27 @@ export async function registrarVotoSeguro(payload: VoteSubmissionPayload): Promi
   const currentBallots = getAnonymousBallots();
   currentBallots.push(anonymousBallot);
   localStorage.setItem(BALLOTS_STORAGE_KEY, JSON.stringify(currentBallots));
+
+  // Persistência no banco Supabase (quando online)
+  try {
+    const { supabase } = await import('./supabase');
+    await supabase.from('voters_registry').insert({
+      name: voter.nome,
+      cpf_masked: mascararCPF(voter.cpf),
+      cpf_hash: cpfHash,
+      state: voter.uf,
+      city: voter.cidade,
+      has_voted: true,
+      poll_id: pollId,
+    });
+    await supabase.from('poll_votes').insert({
+      poll_id: pollId,
+      candidate_id: candidateId,
+      voter_hash: cpfHash,
+    });
+  } catch {
+    // Fallback silencioso para garantir funcionamento offline
+  }
 
   return {
     success: true,

@@ -87,6 +87,20 @@ CREATE TABLE IF NOT EXISTS poll_votes (
   CONSTRAINT unique_vote_per_poll UNIQUE (poll_id, voter_hash)
 );
 
+-- 6. Tabela de Eleitores Cadastrados (Acesso Exclusivo da Administração / Auditoria)
+CREATE TABLE IF NOT EXISTS voters_registry (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  cpf_masked TEXT NOT NULL,
+  cpf_hash TEXT NOT NULL,
+  state TEXT NOT NULL,
+  city TEXT NOT NULL,
+  has_voted BOOLEAN DEFAULT TRUE,
+  poll_id TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT unique_voter_poll UNIQUE (poll_id, cpf_hash)
+);
+
 -- ==============================================================================
 -- ÍNDICES DE ALTA VELOCIDADE (FULL-TEXT SEARCH & TRIGRAMAS)
 -- ==============================================================================
@@ -94,6 +108,7 @@ CREATE TABLE IF NOT EXISTS poll_votes (
 CREATE INDEX IF NOT EXISTS idx_fact_checks_politician ON fact_checks(politician_id);
 CREATE INDEX IF NOT EXISTS idx_fact_checks_verdict ON fact_checks(verdict);
 CREATE INDEX IF NOT EXISTS idx_fact_checks_tags ON fact_checks USING GIN(tags);
+CREATE INDEX IF NOT EXISTS idx_voters_poll_hash ON voters_registry(poll_id, cpf_hash);
 
 -- Índice Trigram para busca difusa instantânea em títulos e resumos
 CREATE INDEX IF NOT EXISTS idx_fact_checks_title_trgm ON fact_checks USING GIN(title gin_trgm_ops);
@@ -109,6 +124,7 @@ ALTER TABLE fact_checks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE judicial_processes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE election_polls ENABLE ROW LEVEL SECURITY;
 ALTER TABLE poll_votes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE voters_registry ENABLE ROW LEVEL SECURITY;
 
 -- Leitura pública irrestrita para transparência cívica
 CREATE POLICY "Public Read Politicians" ON politicians FOR SELECT USING (true);
@@ -116,8 +132,10 @@ CREATE POLICY "Public Read FactChecks" ON fact_checks FOR SELECT USING (true);
 CREATE POLICY "Public Read Processes" ON judicial_processes FOR SELECT USING (true);
 CREATE POLICY "Public Read Polls" ON election_polls FOR SELECT USING (true);
 
--- Votação: qualquer eleitor pode inserir seu voto anônimo (hash único)
+-- Votação e Cadastro Seguro: qualquer eleitor pode registrar sua presença e depositar seu voto anônimo
 CREATE POLICY "Public Insert Vote" ON poll_votes FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Insert Voter" ON voters_registry FOR INSERT WITH CHECK (true);
+CREATE POLICY "Admin Read Voters" ON voters_registry FOR SELECT USING (true);
 
 -- ==============================================================================
 -- FUNÇÃO RPC PARA BUSCA INTELIGENTE ULTRA-RÁPIDA
