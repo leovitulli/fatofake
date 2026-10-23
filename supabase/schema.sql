@@ -93,6 +93,8 @@ CREATE TABLE IF NOT EXISTS voters_registry (
   name TEXT NOT NULL,
   cpf_masked TEXT NOT NULL,
   cpf_hash TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
   state TEXT NOT NULL,
   city TEXT NOT NULL,
   has_voted BOOLEAN DEFAULT TRUE,

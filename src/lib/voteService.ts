@@ -51,6 +51,14 @@ export function mascararCPF(cpf: string): string {
   return `***.***.${clean.slice(6, 9)}-${clean.slice(9, 11)}`;
 }
 
+// Formatação amigável de Celular / WhatsApp ((00) 00000-0000)
+export function formatarTelefone(value: string): string {
+  const clean = value.replace(/\D/g, '').slice(0, 11);
+  if (clean.length <= 2) return clean;
+  if (clean.length <= 7) return `(${clean.slice(0, 2)}) ${clean.slice(2)}`;
+  return `(${clean.slice(0, 2)}) ${clean.slice(2, 7)}-${clean.slice(7, 11)}`;
+}
+
 // Ofuscação de nome para auditoria pública de transparência (ex: "Maria da Silva" -> "Maria da S***")
 export function ofuscarNome(nome: string): string {
   const partes = nome.trim().split(/\s+/);
@@ -112,6 +120,8 @@ export interface VoteSubmissionPayload {
   voter: {
     nome: string;
     cpf: string;
+    email?: string;
+    phone?: string;
     uf: string;
     cidade: string;
   };
@@ -161,6 +171,8 @@ export async function registrarVotoSeguro(payload: VoteSubmissionPayload): Promi
     nameMasked: ofuscarNome(voter.nome),
     name: voter.nome,
     cpfMasked: mascararCPF(voter.cpf),
+    email: voter.email || '',
+    phone: voter.phone || '',
     state: voter.uf,
     city: voter.cidade,
     hasVoted: true,
@@ -190,13 +202,15 @@ export async function registrarVotoSeguro(payload: VoteSubmissionPayload): Promi
   currentBallots.push(anonymousBallot);
   localStorage.setItem(BALLOTS_STORAGE_KEY, JSON.stringify(currentBallots));
 
-  // Persistência no banco Supabase (quando online)
+  // Persistência no banco Supabase (direto nas tabelas da nuvem)
   try {
     const { supabase } = await import('./supabase');
     await supabase.from('voters_registry').insert({
       name: voter.nome,
       cpf_masked: mascararCPF(voter.cpf),
       cpf_hash: cpfHash,
+      email: voter.email || null,
+      phone: voter.phone || null,
       state: voter.uf,
       city: voter.cidade,
       has_voted: true,

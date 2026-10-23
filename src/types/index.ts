@@ -134,6 +134,8 @@ export interface VoterRegistration {
   nameMasked: string; // Ex: "Maria S***"
   name?: string; // Nome completo para o painel de auditoria
   cpfMasked?: string; // Ex: "***.***.789-00"
+  email?: string; // E-mail do eleitor
+  phone?: string; // Celular / WhatsApp para auditoria
   state: string;
   city: string;
   hasVoted: boolean;

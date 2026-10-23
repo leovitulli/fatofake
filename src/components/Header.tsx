@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { ShieldCheck, Vote, Users, Lock, Scale, CheckCircle2 } from 'lucide-react';
 
 interface HeaderProps {
@@ -63,6 +64,15 @@ export function Header({ activeTab, setActiveTab, totalChecks, totalVotes, total
             <span>Certidões STF &amp; TSE</span>
             <span className="text-slate-700">·</span>
             <span className="text-emerald-400/90 font-medium">Voto 100% Sigiloso</span>
+            <span className="text-slate-700">·</span>
+            <Link 
+              href="/admin" 
+              className="text-slate-300 hover:text-emerald-400 font-semibold transition-colors flex items-center gap-1.5 bg-slate-900 px-2 py-0.5 rounded-md border border-slate-700/80 shadow-xs hover:border-emerald-500/50"
+              title="Acesso Restrito ao Painel do Administrador (Gestão de Eleitores)"
+            >
+              <Lock className="w-3 h-3 text-emerald-400" />
+              <span>Painel Admin</span>
+            </Link>
           </div>
         </div>
       </div>

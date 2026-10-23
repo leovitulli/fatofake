@@ -33,6 +33,8 @@ interface VoterRow {
   cpfMasked?: string;
   cpf_hash?: string;
   cpfHash?: string;
+  email?: string;
+  phone?: string;
   state: string;
   city: string;
   has_voted?: boolean;
@@ -128,6 +130,8 @@ export default function AdminPage() {
       name: v.name || v.nameMasked || 'Cidadão Eleitor',
       cpf_masked: v.cpfMasked || '***.***.***-**',
       cpf_hash: v.cpfHash,
+      email: v.email || '',
+      phone: v.phone || '',
       state: v.state,
       city: v.city,
       has_voted: v.hasVoted,
@@ -166,6 +170,8 @@ export default function AdminPage() {
           name: lv.name || lv.nameMasked || 'Cidadão Eleitor',
           cpf_masked: lv.cpfMasked || '***.***.***-**',
           cpf_hash: lv.cpfHash,
+          email: lv.email || '',
+          phone: lv.phone || '',
           state: lv.state,
           city: lv.city,
           has_voted: lv.hasVoted,
@@ -209,10 +215,12 @@ export default function AdminPage() {
       return;
     }
 
-    const headers = ['Nome Completo', 'CPF Mascarado', 'Estado (UF)', 'Cidade', 'Pesquisa', 'Data e Hora', 'Status'];
+    const headers = ['Nome Completo', 'CPF Mascarado', 'E-mail', 'Celular / WhatsApp', 'Estado (UF)', 'Cidade', 'Pesquisa', 'Data e Hora', 'Status'];
     const rows = filteredVoters.map(v => [
       `"${v.name || 'Cidadão'}"`,
       `"${v.cpf_masked || v.cpfMasked || '***.***.***-**'}"`,
+      `"${v.email || ''}"`,
+      `"${v.phone || ''}"`,
       `"${v.state || ''}"`,
       `"${v.city || ''}"`,
       `"${v.poll_id || v.pollId || 'Presidencial 2026'}"`,
@@ -528,6 +536,7 @@ export default function AdminPage() {
                       <th className="py-3 px-4">#</th>
                       <th className="py-3 px-4">Cidadão / Nome</th>
                       <th className="py-3 px-4">CPF Mascarado</th>
+                      <th className="py-3 px-4">Contato (E-mail / Whats)</th>
                       <th className="py-3 px-4">Localidade</th>
                       <th className="py-3 px-4">Data e Horário</th>
                       <th className="py-3 px-4">Pesquisa</th>
@@ -538,7 +547,7 @@ export default function AdminPage() {
                   <tbody className="divide-y divide-slate-800/60">
                     {filteredVoters.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-slate-400">
+                        <td colSpan={9} className="py-12 text-center text-slate-400">
                           <Users className="w-8 h-8 text-slate-600 mx-auto mb-2" />
                           <p className="font-medium text-sm text-slate-300">Nenhum eleitor encontrado.</p>
                           <p className="text-xs text-slate-500 mt-1">
@@ -567,6 +576,11 @@ export default function AdminPage() {
                             </td>
                             <td className="py-3.5 px-4 font-mono text-slate-300">
                               {voter.cpf_masked || voter.cpfMasked || '***.***.***-**'}
+                            </td>
+                            <td className="py-3.5 px-4 text-slate-300 text-[11px]">
+                              {voter.email && <div className="text-slate-200 font-medium truncate max-w-[170px]">{voter.email}</div>}
+                              {voter.phone && <div className="text-slate-400 font-mono">{voter.phone}</div>}
+                              {!voter.email && !voter.phone && <span className="text-slate-600">Não informado</span>}
                             </td>
                             <td className="py-3.5 px-4 text-slate-300">
                               <span className="font-medium">{voter.city}</span>

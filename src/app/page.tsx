@@ -543,11 +543,11 @@ export default function HomePage() {
           <div className="flex items-center gap-2">
             <Link 
               href="/admin" 
-              className="text-slate-700 hover:text-slate-400 p-1 rounded transition-colors"
-              title="Acesso de Governança Interna (Ctrl+Shift+A)"
-              aria-label="Acesso de Governança"
+              className="text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 shadow-xs font-medium"
+              title="Acesso de Governança e Gestão de Eleitores (Ctrl+Shift+A)"
             >
-              <Lock className="w-3.5 h-3.5 opacity-30 hover:opacity-100" />
+              <Lock className="w-3 h-3 text-emerald-400" />
+              <span>Painel do Administrador</span>
             </Link>
           </div>
         </div>
