@@ -48,6 +48,87 @@ function inferVerdictFromText(text: string): VerdictType {
   return 'ENGANOSO';
 }
 
+function resolvePoliticianForNews(query: string, title: string) {
+  const text = `${query} ${title}`.toLowerCase();
+
+  // 1. Temas vinculados a Flávio Bolsonaro (INSS, Careca do INSS, Rachadinha, Queiroz, Master)
+  if (
+    text.includes('inss') ||
+    text.includes('careca do inss') ||
+    text.includes('previdencia') ||
+    text.includes('rachadinha') ||
+    text.includes('queiroz') ||
+    text.includes('flavio') ||
+    text.includes('banco master')
+  ) {
+    const flavio = INITIAL_POLITICIANS.find(p => p.id === 'flavio-bolsonaro');
+    if (flavio) {
+      return {
+        id: flavio.id,
+        name: flavio.name,
+        role: flavio.role,
+        state: flavio.state,
+        party: flavio.party,
+        photoUrl: flavio.photoUrl,
+      };
+    }
+  }
+
+  // 2. Temas vinculados a Lula
+  if (text.includes('lula') || text.includes('luiz inacio')) {
+    const lula = INITIAL_POLITICIANS.find(p => p.id === 'lula');
+    if (lula) {
+      return {
+        id: lula.id,
+        name: lula.name,
+        role: lula.role,
+        state: lula.state,
+        party: lula.party,
+        photoUrl: lula.photoUrl,
+      };
+    }
+  }
+
+  // 3. Temas vinculados a Jair Bolsonaro
+  if (text.includes('jair bolsonaro') || (text.includes('bolsonaro') && !text.includes('flavio'))) {
+    const jair = INITIAL_POLITICIANS.find(p => p.id === 'jair-bolsonaro');
+    if (jair) {
+      return {
+        id: jair.id,
+        name: jair.name,
+        role: jair.role,
+        state: jair.state,
+        party: jair.party,
+        photoUrl: jair.photoUrl,
+      };
+    }
+  }
+
+  // 4. Temas vinculados a Tarcísio de Freitas
+  if (text.includes('tarcisio') || text.includes('sabesp')) {
+    const tarcisio = INITIAL_POLITICIANS.find(p => p.id === 'tarcisio-de-freitas');
+    if (tarcisio) {
+      return {
+        id: tarcisio.id,
+        name: tarcisio.name,
+        role: tarcisio.role,
+        state: tarcisio.state,
+        party: tarcisio.party,
+        photoUrl: tarcisio.photoUrl,
+      };
+    }
+  }
+
+  return {
+    id: 'tema-aberto',
+    name: 'Tema / Notícia Aberta',
+    role: 'Deputado Federal' as any,
+    state: 'BR',
+    party: 'Imprensa Aberta',
+    photoUrl: '/images/politicians/branco-nulo.svg',
+  };
+}
+
 // 1. Busca ao vivo via Google Fact Check Tools API (pública/gratuita)
 async function fetchGoogleFactCheckAPI(query: string): Promise<FactCheck[]> {
   const apiKey = process.env.GOOGLE_FACTCHECK_API_KEY || '';
@@ -77,19 +158,13 @@ async function fetchGoogleFactCheckAPI(query: string): Promise<FactCheck[]> {
       const verdict = inferVerdictFromText(`${rating} ${title}`);
       const agency = review.publisher?.name || 'Agência de Checagem';
       const sourceUrl = review.url || '';
+      const politicianData = resolvePoliticianForNews(query, title);
 
       results.push({
         id: `live-gfact-${i}-${Date.now()}`,
         title,
         verdict,
-        politician: {
-          id: 'pesquisa-aberta',
-          name: claim.claimant || 'Figura Pública / Autoridade',
-          role: 'Deputado Federal',
-          state: 'BR',
-          party: 'Geral',
-          photoUrl: '/images/politicians/branco-nulo.svg',
-        },
+        politician: politicianData,
         summary: `Alegação verificada por ${agency}: "${rating}".`,
         detailedExplanation: `Investigação conduzida pela agência ${agency}. Conclusão: ${rating}. Acesse o artigo original completo na fonte indicada.`,
         viralClaim: claim.text || title,
@@ -140,19 +215,13 @@ async function fetchGoogleNewsRSS(query: string): Promise<FactCheck[]> {
       const title = decodeHtmlEntities(rawTitle.replace(/\s*-\s*[^-]+$/, '')); // remove sufixo da fonte
       const agency = decodeHtmlEntities(rawSource);
       const verdict = inferVerdictFromText(title);
+      const politicianData = resolvePoliticianForNews(query, title);
 
       results.push({
         id: `live-rss-${i}-${Date.now()}`,
         title,
         verdict,
-        politician: {
-          id: 'pesquisa-aberta',
-          name: query.length > 20 ? 'Personalidade Política' : query,
-          role: 'Deputado Federal',
-          state: 'BR',
-          party: 'Geral',
-          photoUrl: '/images/politicians/branco-nulo.svg',
-        },
+        politician: politicianData,
         summary: `Notícia de checagem apurada em tempo real por ${agency}.`,
         detailedExplanation: `Publicação recente identificada nos sistemas de monitoramento jornalístico. Consulte o portal ${agency} para íntegra dos documentos e depoimentos.`,
         viralClaim: title,

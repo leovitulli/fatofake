@@ -191,7 +191,7 @@ ${factCheck.officialProofUrl ? `2. Prova Oficial: ${factCheck.officialProofUrl.n
           </div>
         </div>
 
-        {/* Informações do Político Envolvido */}
+        {/* Informações do Político ou Tema Envolvido */}
         <div className="flex items-center gap-3 mb-4 bg-slate-50/90 p-2.5 rounded-2xl border border-slate-200/80">
           <img 
             src={factCheck.politician.photoUrl} 
@@ -207,11 +207,15 @@ ${factCheck.officialProofUrl ? `2. Prova Oficial: ${factCheck.officialProofUrl.n
                 {factCheck.politician.name}
               </h4>
               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200 text-slate-800">
-                {factCheck.politician.party}
+                {factCheck.politician.id === 'tema-aberto' || factCheck.politician.id === 'pesquisa-web'
+                  ? 'Apuração Aberta'
+                  : factCheck.politician.party}
               </span>
             </div>
             <p className="text-xs text-slate-500 truncate">
-              {factCheck.politician.role} {factCheck.politician.state !== 'BR' && `· ${factCheck.politician.state}`}
+              {factCheck.politician.id === 'tema-aberto' || factCheck.politician.id === 'pesquisa-web'
+                ? 'Investigação / Noticiário em Tempo Real'
+                : `${factCheck.politician.role} ${factCheck.politician.state !== 'BR' ? `· ${factCheck.politician.state}` : ''}`}
             </p>
           </div>
         </div>

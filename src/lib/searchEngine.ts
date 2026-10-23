@@ -22,7 +22,7 @@ const POLITICIAN_ALIASES: Record<string, string> = {
   'luiz inacio lula da silva': 'lula',
   'presidente lula': 'lula',
 
-  // Flávio Bolsonaro e Dossiês Correlatos (Crimeta Russa / Bolsomaster)
+  // Flávio Bolsonaro e Dossiês Correlatos (Crimeta Russa / Bolsomaster / INSS / Rachadinha)
   'flavio bolsonaro': 'flavio-bolsonaro',
   flavio: 'flavio-bolsonaro',
   'senador flavio': 'flavio-bolsonaro',
@@ -34,6 +34,12 @@ const POLITICIAN_ALIASES: Record<string, string> = {
   rachadinhas: 'flavio-bolsonaro',
   queiroz: 'flavio-bolsonaro',
   'fabricio queiroz': 'flavio-bolsonaro',
+  inss: 'flavio-bolsonaro',
+  'careca do inss': 'flavio-bolsonaro',
+  'cpi inss': 'flavio-bolsonaro',
+  'cpi do inss': 'flavio-bolsonaro',
+  'fraude inss': 'flavio-bolsonaro',
+  previdencia: 'flavio-bolsonaro',
   crimetarussa: 'flavio-bolsonaro',
   'crimeta russa': 'flavio-bolsonaro',
   bolsomaster: 'flavio-bolsonaro',
@@ -88,6 +94,10 @@ const POLITICIAN_ALIASES: Record<string, string> = {
 
 // Termos que indicam investigação e que devem ser mantidos como palavras-chave mesmo se mapeados a um político
 const INVESTIGATION_TOPIC_TERMS = new Set([
+  'inss',
+  'careca',
+  'previdencia',
+  'cpi',
   'rachadinha',
   'rachadinhas',
   'queiroz',

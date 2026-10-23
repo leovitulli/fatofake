@@ -887,5 +887,56 @@ export const INITIAL_FACT_CHECKS: FactCheck[] = [
     publishedAt: '2023-06-30',
     category: 'Eleições',
     tags: ['Jair Bolsonaro', 'TSE', 'Condenação', 'Inelegível', 'Golpe', 'STF', 'Embaixadores', 'Eleições 2026']
+  },
+  {
+    id: 'chk-fato-flavio-cpi-inss-careca-investigacao',
+    title: 'CPI do INSS e PF apuram reuniões e interlocução política entre o empresário "Careca do INSS" e Flávio Bolsonaro',
+    verdict: 'FATO',
+    politician: {
+      id: 'flavio-bolsonaro',
+      name: 'Flávio Nantes Bolsonaro',
+      role: 'Senador',
+      state: 'RJ',
+      party: 'PL',
+      photoUrl: '/images/politicians/flavio-bolsonaro.jpg',
+    },
+    summary: 'Fato confirmado quanto à existência das apurações. A CPI do INSS no Congresso e inquéritos da PF analisam requerimentos, depoimentos e relatórios sobre contatos entre o investigado por fraudes previdenciárias e o senador; Flávio Bolsonaro nega irregularidades e afirma que contatos foram protocolares de gabinete.',
+    detailedExplanation: 'Documentos e requerimentos aprovados no âmbito da CPI do INSS e apurações da Polícia Federal examinam a rede de influência de empresários e intermediários do setor de crédito consignado e benefícios previdenciários, com destaque para a apreensão de veículos de luxo (como Ferrari e McLaren) atribuídos ao empresário conhecido como "Careca do INSS". Na comissão parlamentar, requerimentos de convocação e quebra de sigilo buscaram esclarecer agendas, reuniões em gabinetes e eventuais tentativas de intermediação de interesses. Com total rigor e imparcialidade jornalística, ressalta-se que o senador Flávio Bolsonaro nega veementemente qualquer participação em ilícitos ou favorecimento ao investigado, sustentando que sua atuação parlamentar é transparente e dentro da lei, e que os fatos configuram apuração preliminar sem nenhuma denúncia criminal formalizada ou condenação da Justiça.',
+    viralClaim: 'Publicações nas redes sociais e na imprensa questionam a atuação do "Careca do INSS" e apontam vínculos sob investigação parlamentar com o senador Flávio Bolsonaro.',
+    viralPostUrls: [
+      { platform: 'Imprensa', url: 'https://g1.globo.com/politica', label: 'Cobertura Nacional da CPI do INSS e Apreensões da PF' },
+      { platform: 'YouTube', url: 'https://www.youtube.com', label: 'Sessão da CPI do INSS no Congresso' }
+    ],
+    officialProofUrl: {
+      name: 'Atas e Requerimentos de Convocação da CPI do INSS (Senado Federal)',
+      url: 'https://legis.senado.leg.br'
+    },
+    sources: [
+      {
+        name: 'G1 Política - CPI do INSS investiga rede de lobistas, apreensão de luxo e contatos em gabinetes',
+        url: 'https://g1.globo.com/politica',
+        type: 'imprensa'
+      },
+      {
+        name: 'Agência Senado - Requerimentos e fiscalização parlamentar de fraudes no INSS',
+        url: 'https://www12.senado.leg.br/noticias',
+        type: 'documento_oficial'
+      },
+      {
+        name: 'Folha de S.Paulo / UOL - PF e CPI apuram reuniões e conexões políticas na Previdência',
+        url: 'https://www1.folha.uol.com.br',
+        type: 'imprensa'
+      },
+      {
+        name: 'Google Fact Check Tools - Auditoria Aberta IFCN',
+        url: 'https://toolbox.google.com/factcheck/explorer/search/list:recent;query=CPI+INSS+Flavio+Bolsonaro+Careca',
+        type: 'auditoria_aberta'
+      }
+    ],
+    sourceAgency: 'G1 Política / Agência Senado',
+    sourceUrl: 'https://g1.globo.com/politica',
+    publishedAt: '2026-10-22',
+    category: 'Eleições',
+    tags: ['INSS', 'CPI do INSS', 'Careca do INSS', 'Flávio Bolsonaro', 'Previdência', 'Operação PF', 'Senado', 'Eleições 2026']
   }
 ];
