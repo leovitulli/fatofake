@@ -2,10 +2,62 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase';
 import { validarCPF, mascararCPF, gerarHashEleitor, ofuscarNome } from '@/lib/voteService';
 
+// Rastreador de Rate-Limiting por IP (Sliding Window em memória)
+const ipVoteTracker = new Map<string, { count: number; firstSeen: number }>();
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // Janela de 1 minuto
+const MAX_VOTES_PER_IP_PER_MIN = 6;    // Máximo 6 votos/min por IP compartilhado
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { pollId, candidateId, role, state, voter } = body;
+    const { pollId, candidateId, role, state, voter, securityVerification } = body;
+
+    // 0. CAMADA ANTI-ROBÔ / ANTI-IA (DEFESA RED-TEAM)
+    // 0.1 Honeypot: Campo oculto que robôs preenchem automaticamente
+    if (securityVerification?.botTrap && String(securityVerification.botTrap).trim().length > 0) {
+      console.warn('[RED-TEAM-SHIELD] Ataque automatizado bloqueado via Honeypot');
+      return NextResponse.json(
+        { success: false, message: 'Envio automatizado bloqueado pelo escudo de integridade cívica.' },
+        { status: 403 }
+      );
+    }
+
+    // 0.2 Timing Defense: Rejeita scripts ultrarrápidos (< 1.2s)
+    if (securityVerification?.elapsedMs !== undefined && securityVerification.elapsedMs < 1200) {
+      console.warn('[RED-TEAM-SHIELD] Envio em velocidade desumana detectado:', securityVerification.elapsedMs);
+      return NextResponse.json(
+        { success: false, message: 'Velocidade de submissão suspeita. Por favor, revise seus dados e confirme seu voto humanamente.' },
+        { status: 429 }
+      );
+    }
+
+    // 0.3 Rate Limiting por IP para impedir flooding de requisições
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 
+               request.headers.get('x-real-ip') || 
+               'local-ip';
+
+    if (ip && ip !== 'local-ip') {
+      const nowMs = Date.now();
+      const ipRecord = ipVoteTracker.get(ip);
+      if (ipRecord) {
+        if (nowMs - ipRecord.firstSeen < RATE_LIMIT_WINDOW_MS) {
+          if (ipRecord.count >= MAX_VOTES_PER_IP_PER_MIN) {
+            return NextResponse.json(
+              { 
+                success: false, 
+                message: 'Detectamos muitas requisições originadas desta mesma rede. Para a segurança do pleito, aguarde 60 segundos.' 
+              },
+              { status: 429 }
+            );
+          }
+          ipRecord.count += 1;
+        } else {
+          ipVoteTracker.set(ip, { count: 1, firstSeen: nowMs });
+        }
+      } else {
+        ipVoteTracker.set(ip, { count: 1, firstSeen: nowMs });
+      }
+    }
 
     if (!voter?.cpf || !validarCPF(voter.cpf)) {
       return NextResponse.json(

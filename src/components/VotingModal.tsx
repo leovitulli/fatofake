@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Candidate, ElectionPoll } from '@/types';
 import { 
   X, 
@@ -16,7 +16,8 @@ import {
   Fingerprint,
   Info,
   PenTool,
-  ShieldAlert
+  ShieldAlert,
+  Shield
 } from 'lucide-react';
 import { 
   formatarCPF, 
@@ -43,6 +44,11 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [receipt, setReceipt] = useState<VoteResult['auditReceipt'] | null>(null);
+
+  // Estados do Escudo Anti-Robô / Anti-IA
+  const openedAtRef = useRef<number>(Date.now());
+  const [isHumanChecked, setIsHumanChecked] = useState(false);
+  const [honeypotTrap, setHoneypotTrap] = useState('');
 
   const ESTADOS_BR = [
     'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 
@@ -84,6 +90,11 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
       return;
     }
 
+    if (!isHumanChecked) {
+      setErrorMsg('Por favor, marque a confirmação cívica "Sou um eleitor humano" para ativar a proteção anti-robô.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -99,6 +110,11 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
           phone: celular,
           uf,
           cidade,
+        },
+        securityVerification: {
+          botTrap: honeypotTrap,
+          elapsedMs: Date.now() - openedAtRef.current,
+          humanVerified: isHumanChecked,
         }
       });
 
@@ -382,6 +398,41 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
                       placeholder="Ex: São Paulo"
                       className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-600"
                       required
+                    />
+                  </div>
+                </div>
+
+                {/* Escudo Anti-Robô & IA (Verificação Cívica Humana) */}
+                <div className="mt-4 p-3 rounded-xl bg-slate-50 border border-slate-200/90 text-left">
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      type="checkbox"
+                      id="human-verify"
+                      checked={isHumanChecked}
+                      onChange={(e) => setIsHumanChecked(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                      required
+                    />
+                    <label htmlFor="human-verify" className="text-xs text-slate-700 leading-snug font-medium cursor-pointer">
+                      <span className="font-bold text-slate-900 block flex items-center gap-1.5">
+                        <Shield className="w-3.5 h-3.5 text-emerald-600" />
+                        Declaração Cívica Anti-Robô &amp; IA
+                      </span>
+                      Confirmo que sou um cidadão real e que este voto representa minha decisão individual e consciente, sem automação.
+                    </label>
+                  </div>
+                  
+                  {/* Honeypot field invisível para humanos, mas preenchido por scrapers e robôs */}
+                  <div className="hidden" aria-hidden="true" style={{ display: 'none', position: 'absolute', left: '-9999px' }}>
+                    <label htmlFor="website-trap">Não preencha este campo</label>
+                    <input
+                      type="text"
+                      id="website-trap"
+                      name="website-trap"
+                      value={honeypotTrap}
+                      onChange={(e) => setHoneypotTrap(e.target.value)}
+                      tabIndex={-1}
+                      autoComplete="off"
                     />
                   </div>
                 </div>

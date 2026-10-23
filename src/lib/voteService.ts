@@ -141,6 +141,11 @@ export interface VoteSubmissionPayload {
     uf: string;
     cidade: string;
   };
+  securityVerification?: {
+    botTrap?: string;
+    elapsedMs?: number;
+    humanVerified?: boolean;
+  };
 }
 
 export interface VoteResult {

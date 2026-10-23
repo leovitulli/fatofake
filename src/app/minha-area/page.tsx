@@ -113,6 +113,13 @@ function MinhaAreaContent() {
   const [adminSelectedUf, setAdminSelectedUf] = useState('TODAS');
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
 
+  // Validador Cívico de Hash de Auditoria
+  const [showHashAuditModal, setShowHashAuditModal] = useState(false);
+  const [auditHashInput, setAuditHashInput] = useState('');
+  const [isVerifyingHash, setIsVerifyingHash] = useState(false);
+  const [auditVerificationResult, setAuditVerificationResult] = useState<any | null>(null);
+  const [auditError, setAuditError] = useState('');
+
   const DEFAULT_ADMIN_PASS = 'admin@fatosfakes2026';
 
   // Helper para verificar se um CPF está autorizado como gestor
@@ -126,6 +133,36 @@ function MinhaAreaContent() {
       return false;
     } catch {
       return false;
+    }
+  };
+
+  // Handler para acionar a validação cívica do hash na urna cega
+  const handleVerifyHash = async (hashToVerify?: string) => {
+    const targetHash = (hashToVerify || auditHashInput).trim();
+    if (!targetHash) {
+      setAuditError('Por favor, informe ou cole um Hash SHA-256 para verificar.');
+      setShowHashAuditModal(true);
+      return;
+    }
+
+    setAuditHashInput(targetHash);
+    setShowHashAuditModal(true);
+    setIsVerifyingHash(true);
+    setAuditError('');
+    setAuditVerificationResult(null);
+
+    try {
+      const res = await fetch(`/api/audit/verify-hash?hash=${encodeURIComponent(targetHash)}`);
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setAuditError(data.error || 'Hash não localizado no repositório auditável.');
+      } else {
+        setAuditVerificationResult(data.data);
+      }
+    } catch {
+      setAuditError('Falha ao conectar com o serviço de auditoria criptográfica.');
+    } finally {
+      setIsVerifyingHash(false);
     }
   };
 
@@ -856,22 +893,32 @@ function MinhaAreaContent() {
                     {voterProfile.cpf_hash || voterProfile.cpfHash || 'Hash auditável gerado com salt de segurança'}
                   </p>
                 </div>
-                <button
-                  onClick={() => copyToClipboard(voterProfile.cpf_hash || voterProfile.cpfHash || '', 'citizen_hash')}
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 shrink-0 border border-slate-700"
-                >
-                  {copiedHash === 'citizen_hash' ? (
-                    <>
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Copiado!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-3.5 h-3.5 text-slate-400" />
-                      <span>Copiar Recibo</span>
-                    </>
-                  )}
-                </button>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => copyToClipboard(voterProfile.cpf_hash || voterProfile.cpfHash || '', 'citizen_hash')}
+                    className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 border border-slate-700"
+                  >
+                    {copiedHash === 'citizen_hash' ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Copiar Recibo</span>
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleVerifyHash(voterProfile.cpf_hash || voterProfile.cpfHash || '')}
+                    className="px-3 py-1.5 rounded-lg bg-cyan-950/60 hover:bg-cyan-900/80 text-cyan-300 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 border border-cyan-500/30 shadow-sm"
+                    title="Validar autenticidade do recibo na Urna Cega"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Validar na Urna Cega</span>
+                  </button>
+                </div>
               </div>
 
             </div>
@@ -1132,6 +1179,19 @@ function MinhaAreaContent() {
                     ))}
                   </select>
                 </div>
+
+                <button
+                  onClick={() => {
+                    setAuditHashInput('');
+                    setAuditVerificationResult(null);
+                    setAuditError('');
+                    setShowHashAuditModal(true);
+                  }}
+                  className="px-3 py-2 rounded-xl bg-cyan-950/40 hover:bg-cyan-900/60 text-cyan-300 text-xs font-bold border border-cyan-500/30 flex items-center gap-1.5 shrink-0 transition-colors"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-cyan-400" />
+                  <span>Auditar Hash Avulso</span>
+                </button>
               </div>
 
               {/* Tabela de Eleitores */}
@@ -1186,7 +1246,7 @@ function MinhaAreaContent() {
                               </span>
                             </td>
                             <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
-                              <div className="flex items-center gap-1.5 max-w-[180px]">
+                              <div className="flex items-center gap-1.5 max-w-[200px]">
                                 <span className="truncate" title={hash}>{hash.slice(0, 16)}...</span>
                                 <button
                                   onClick={() => copyToClipboard(hash, `hash-${index}`)}
@@ -1194,6 +1254,13 @@ function MinhaAreaContent() {
                                   title="Copiar Hash"
                                 >
                                   {copiedHash === `hash-${index}` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                </button>
+                                <button
+                                  onClick={() => handleVerifyHash(hash)}
+                                  className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-cyan-400 transition-colors"
+                                  title="Auditar e validar este hash na Urna Cega"
+                                >
+                                  <ShieldCheck className="w-3.5 h-3.5" />
                                 </button>
                               </div>
                             </td>
@@ -1277,6 +1344,151 @@ function MinhaAreaContent() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Auditoria e Validação Cívica de Hash */}
+      {showHashAuditModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0b1524] border border-slate-800 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2 text-cyan-400 text-xs font-bold uppercase tracking-wider">
+                <ShieldCheck className="w-4 h-4 text-cyan-400" />
+                <span>Validador Cívico de Hash Criptográfico</span>
+              </div>
+              <button
+                onClick={() => setShowHashAuditModal(false)}
+                className="text-slate-400 hover:text-white text-xs font-bold px-2 py-1 rounded-lg hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-4 space-y-4 text-left">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  Hash SHA-256 de Auditoria:
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={auditHashInput}
+                    onChange={(e) => setAuditHashInput(e.target.value)}
+                    placeholder="Cole o hash de 64 caracteres ou prefixo..."
+                    className="flex-1 bg-[#080e18] border border-slate-700 focus:border-cyan-500 rounded-xl px-3 py-2 text-xs font-mono text-cyan-300 placeholder:text-slate-600 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleVerifyHash()}
+                    disabled={isVerifyingHash}
+                    className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl disabled:opacity-50 transition-colors flex items-center gap-1.5 shrink-0"
+                  >
+                    {isVerifyingHash ? (
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Search className="w-3.5 h-3.5" />
+                    )}
+                    <span>Verificar</span>
+                  </button>
+                </div>
+              </div>
+
+              {auditError && (
+                <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p className="font-bold">Hash não autenticado ou não encontrado</p>
+                    <p className="text-slate-300">{auditError}</p>
+                  </div>
+                </div>
+              )}
+
+              {auditVerificationResult && (
+                <div className="p-4 rounded-xl bg-[#080e18] border border-emerald-500/30 space-y-3">
+                  <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>Certificado de Autenticidade Comprovado</span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="bg-[#0b1524] p-3 rounded-lg border border-slate-800 space-y-1">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block">Hash Auditado</span>
+                      <p className="font-mono text-emerald-300 text-[11px] break-all select-all">
+                        {auditVerificationResult.hash}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-[#0b1524] p-2.5 rounded-lg border border-slate-800">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Status da Cédula</span>
+                        <span className="text-emerald-400 font-bold flex items-center gap-1 mt-0.5">
+                          <Check className="w-3 h-3" />
+                          Válido na Urna
+                        </span>
+                      </div>
+                      <div className="bg-[#0b1524] p-2.5 rounded-lg border border-slate-800">
+                        <span className="text-[10px] uppercase font-bold text-slate-500 block">Algoritmo</span>
+                        <span className="text-slate-200 font-medium mt-0.5 block truncate">
+                          {auditVerificationResult.cryptographicStandard}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#0b1524] p-2.5 rounded-lg border border-slate-800">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block">Pleito / Eleição</span>
+                      <p className="text-slate-200 font-medium mt-0.5">
+                        {auditVerificationResult.electionTitle}
+                      </p>
+                    </div>
+
+                    <div className="bg-[#0b1524] p-2.5 rounded-lg border border-slate-800">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block">Data e Hora de Gravação</span>
+                      <p className="text-slate-300 font-mono mt-0.5">
+                        {new Date(auditVerificationResult.recordedAt).toLocaleString('pt-BR')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Nota de Soberania e Sigilo Constitucional */}
+                  <div className="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/20 text-[11px] text-emerald-200/90 leading-relaxed space-y-1">
+                    <p className="font-bold flex items-center gap-1 text-emerald-300">
+                      <Lock className="w-3 h-3" />
+                      Garantia Constitucional de Sigilo do Voto (Art. 14, CF/88):
+                    </p>
+                    <p className="text-slate-300">
+                      {auditVerificationResult.secretBallotGuarantee}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Caixa didática: Como auditar independentemente sem o servidor */}
+              <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 text-xs text-slate-300 space-y-2">
+                <div className="flex items-center gap-1.5 font-bold text-slate-200">
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Como auditar no seu computador (100% Independente):</span>
+                </div>
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  O hash é uma função matemática unidirecional pública. Qualquer perito ou cidadão pode gerar a mesma assinatura no terminal Linux, Mac ou PowerShell executando:
+                </p>
+                <code className="block p-2 rounded-lg bg-[#080e18] text-[10px] font-mono text-cyan-300 border border-slate-800 overflow-x-auto">
+                  echo -n &quot;CPF_LIMPO:fatosfakes_2026_salt_presidencial_urna_cega&quot; | shasum -a 256
+                </code>
+                <p className="text-[10px] text-slate-500">
+                  Se o resultado for idêntico ao hash gravado, a presença do eleitor está matematicamente comprovada e blindada contra fraudes ou duplicidade.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <button
+                onClick={() => setShowHashAuditModal(false)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-colors"
+              >
+                Fechar Validador
+              </button>
+            </div>
           </div>
         </div>
       )}
