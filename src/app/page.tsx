@@ -30,7 +30,8 @@ import {
   Info,
   Scale,
   Globe,
-  Lock
+  Lock,
+  UserCheck
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -46,7 +47,7 @@ export default function HomePage() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'A' || e.key === 'a')) {
         e.preventDefault();
-        router.push('/admin');
+        router.push('/minha-area?tab=admin');
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -542,12 +543,12 @@ export default function HomePage() {
           </div>
           <div className="flex items-center gap-2">
             <Link 
-              href="/admin" 
+              href="/minha-area" 
               className="text-slate-400 hover:text-emerald-400 transition-colors flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 shadow-xs font-medium"
-              title="Acesso de Governança e Gestão de Eleitores (Ctrl+Shift+A)"
+              title="Acesso à Minha Área Cívica e Atualização Cadastral"
             >
-              <Lock className="w-3 h-3 text-emerald-400" />
-              <span>Painel do Administrador</span>
+              <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Minha Área Cívica</span>
             </Link>
           </div>
         </div>

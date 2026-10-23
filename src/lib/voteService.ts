@@ -103,6 +103,22 @@ export function getAnonymousBallots(): AnonymousBallot[] {
   }
 }
 
+export function atualizarEleitorLocal(cpfMaskedOrHash: string, updates: Partial<VoterRegistration>): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const voters = getVotersRegistry();
+    const index = voters.findIndex(v => v.cpfHash === cpfMaskedOrHash || v.cpfMasked === cpfMaskedOrHash);
+    if (index !== -1) {
+      voters[index] = { ...voters[index], ...updates };
+      localStorage.setItem(VOTERS_STORAGE_KEY, JSON.stringify(voters));
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Verifica se um determinado eleitor já votou em uma pesquisa específica.
  */
