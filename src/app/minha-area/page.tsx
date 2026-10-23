@@ -18,20 +18,20 @@ import {
   ExternalLink, 
   AlertCircle, 
   LogOut, 
-  ArrowLeft,
-  Database,
-  Building,
-  Calendar,
-  Copy,
-  Check,
-  UserCheck,
-  Mail,
-  Phone,
-  MapPin,
-  Save,
-  FileText,
-  Sparkles,
-  Shield
+  ArrowLeft, 
+  Building, 
+  Copy, 
+  Check, 
+  UserCheck, 
+  Mail, 
+  Phone, 
+  MapPin, 
+  Save, 
+  Sparkles, 
+  Shield,
+  Compass,
+  FileCheck,
+  ChevronRight
 } from 'lucide-react';
 import { 
   validarCPF, 
@@ -39,9 +39,10 @@ import {
   mascararCPF, 
   formatarTelefone, 
   getVotersRegistry, 
-  atualizarEleitorLocal,
-  gerarHashEleitor
+  atualizarEleitorLocal
 } from '@/lib/voteService';
+import { INITIAL_POLLS } from '@/data/polls';
+import { GeolocatedReportView } from '@/components/GeolocatedReportView';
 
 interface VoterData {
   id?: string;
@@ -71,26 +72,18 @@ const BRAZIL_STATES = [
 function MinhaAreaContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const initialTab = searchParams.get('tab') === 'admin' ? 'admin_login' : 'voter_login';
 
-  // Estados de Autenticação
-  const [activeLoginMode, setActiveLoginMode] = useState<'voter' | 'admin'>(
-    searchParams.get('tab') === 'admin' ? 'admin' : 'voter'
-  );
+  // Estados de Sessão
   const [currentUserRole, setCurrentUserRole] = useState<'guest' | 'voter' | 'admin'>('guest');
+  const [isSuperUser, setIsSuperUser] = useState(false);
+  const [activePortalTab, setActivePortalTab] = useState<'profile' | 'management'>('profile');
   
-  // Login Cidadão
+  // Login Cidadão por CPF (Único método visível publicamente)
   const [voterCpf, setVoterCpf] = useState('');
   const [voterLoading, setVoterLoading] = useState(false);
   const [voterError, setVoterError] = useState('');
 
-  // Login Admin
-  const [adminPass, setAdminPass] = useState('');
-  const [showAdminPass, setShowAdminPass] = useState(false);
-  const [adminLoading, setAdminLoading] = useState(false);
-  const [adminError, setAdminError] = useState('');
-
-  // Sessão do Cidadão
+  // Perfil do Cidadão Logado
   const [voterProfile, setVoterProfile] = useState<VoterData | null>(null);
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
@@ -100,41 +93,62 @@ function MinhaAreaContent() {
   const [profileSuccessMsg, setProfileSuccessMsg] = useState('');
   const [profileErrorMsg, setProfileErrorMsg] = useState('');
 
-  // Sessão do Administrador (Painel Geral)
-  const [adminActiveTab, setAdminActiveTab] = useState<'overview' | 'profile'>('overview');
+  // Modal Interno de Chave de Governança (Desbloqueio de Gestão dentro do Perfil)
+  const [showAdminKeyModal, setShowAdminKeyModal] = useState(false);
+  const [adminKeyInput, setAdminKeyInput] = useState('');
+  const [adminKeyError, setAdminKeyError] = useState('');
+  const [showKeyText, setShowKeyText] = useState(false);
+
+  // Gestão Administrativa & Tabela de Eleitores
   const [votersList, setVotersList] = useState<VoterData[]>([]);
   const [isLoadingAdminData, setIsLoadingAdminData] = useState(false);
-  const [stats, setStats] = useState({
-    totalVoters: 0,
-    totalBallots: 0,
-    statesCount: 0,
-  });
   const [adminSearch, setAdminSearch] = useState('');
   const [adminSelectedUf, setAdminSelectedUf] = useState('TODAS');
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
 
   const DEFAULT_ADMIN_PASS = 'admin@fatosfakes2026';
 
+  // Helper para verificar se um CPF está autorizado como gestor
+  const checkIsAdminCpf = (cleanCpf: string): boolean => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const savedAdminCpfs: string[] = JSON.parse(localStorage.getItem('fatosfakes_admin_cpfs') || '[]');
+      if (savedAdminCpfs.includes(cleanCpf)) return true;
+      if (sessionStorage.getItem('fatosfakes_admin_auth_token')) return true;
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
   // Auto-restauração da sessão salva
   useEffect(() => {
-    // 1. Verifica se havia sessão de admin
-    const savedAdminToken = sessionStorage.getItem('fatosfakes_admin_auth_token') || localStorage.getItem('fatosfakes_admin_auth_token');
-    if (savedAdminToken) {
-      setCurrentUserRole('admin');
-      fetchAdminData(savedAdminToken);
-    } else {
-      // 2. Verifica se havia sessão de cidadão
-      const savedVoterJson = sessionStorage.getItem('fatosfakes_voter_session');
-      if (savedVoterJson) {
-        try {
-          const parsed = JSON.parse(savedVoterJson);
-          if (parsed && (parsed.cpf_hash || parsed.cpfHash)) {
-            setCurrentUserRole('voter');
-            initVoterProfile(parsed);
+    // 1. Verifica se havia sessão de cidadão
+    const savedVoterJson = sessionStorage.getItem('fatosfakes_voter_session');
+    if (savedVoterJson) {
+      try {
+        const parsed = JSON.parse(savedVoterJson);
+        if (parsed && (parsed.cpf_hash || parsed.cpfHash)) {
+          setCurrentUserRole('voter');
+          initVoterProfile(parsed);
+
+          // Verifica se esse CPF tem privilégio de gestão
+          const clean = (parsed.cpf_masked || parsed.cpfMasked || '').replace(/\D/g, '');
+          const hasAdminAccess = checkIsAdminCpf(clean) || Boolean(sessionStorage.getItem('fatosfakes_admin_auth_token'));
+          if (hasAdminAccess) {
+            setIsSuperUser(true);
+            loadAdminVotersData();
           }
-        } catch {
-          // ignore
         }
+      } catch {
+        // ignore
+      }
+    } else {
+      // Se havia token de admin salvo anteriormente
+      const savedAdminToken = sessionStorage.getItem('fatosfakes_admin_auth_token') || localStorage.getItem('fatosfakes_admin_auth_token');
+      if (savedAdminToken) {
+        setIsSuperUser(true);
+        loadAdminVotersData();
       }
     }
   }, []);
@@ -147,201 +161,24 @@ function MinhaAreaContent() {
     setEditCity(data.city || '');
   };
 
-  // 1. LOGIN DO CIDADÃO (por CPF)
-  const handleVoterLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setVoterError('');
-    setProfileSuccessMsg('');
-
-    const cleanCpf = voterCpf.replace(/\D/g, '');
-    if (!cleanCpf) {
-      setVoterError('Por favor, informe seu CPF.');
-      return;
-    }
-
-    if (!validarCPF(cleanCpf)) {
-      setVoterError('CPF inválido. Por favor, verifique os dígitos digitados.');
-      return;
-    }
-
-    setVoterLoading(true);
-
+  // Carrega dados para a Gestão
+  const loadAdminVotersData = async () => {
+    setIsLoadingAdminData(true);
+    const token = sessionStorage.getItem('fatosfakes_admin_auth_token') || DEFAULT_ADMIN_PASS;
     try {
-      // Consulta na API do servidor
-      const res = await fetch('/api/voter/profile', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cpf: cleanCpf }),
+      const res = await fetch(`/api/admin/voters?key=${encodeURIComponent(token)}`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-
-      if (res.ok && data.success && data.voter) {
-        setVoterProfile(data.voter);
-        initVoterProfile(data.voter);
-        setCurrentUserRole('voter');
-        sessionStorage.setItem('fatosfakes_voter_session', JSON.stringify(data.voter));
+      if (res.ok && data.success && data.voters) {
+        setVotersList(data.voters);
       } else {
-        // Fallback local: se a rede ou Supabase oscilar, consulta o registro do navegador
-        const masked = mascararCPF(cleanCpf);
-        const localVoters = getVotersRegistry();
-        const foundLocal = localVoters.find(v => v.cpfMasked === masked);
-
-        if (foundLocal) {
-          const formatted: VoterData = {
-            name: foundLocal.name || foundLocal.nameMasked || 'Cidadão Eleitor',
-            cpf_masked: foundLocal.cpfMasked,
-            cpf_hash: foundLocal.cpfHash,
-            email: foundLocal.email || '',
-            phone: foundLocal.phone || '',
-            state: foundLocal.state || 'SP',
-            city: foundLocal.city || '',
-            has_voted: foundLocal.hasVoted,
-            poll_id: foundLocal.pollId,
-            created_at: foundLocal.registeredAt,
-          };
-          setVoterProfile(formatted);
-          initVoterProfile(formatted);
-          setCurrentUserRole('voter');
-          sessionStorage.setItem('fatosfakes_voter_session', JSON.stringify(formatted));
-        } else {
-          setVoterError(
-            data.error || 'Cadastro não localizado para este CPF. Se você ainda não votou, registre seu voto na página inicial para ativar seu cadastro cívico.'
-          );
-        }
-      }
-    } catch {
-      // Fallback local em caso de erro de conexão
-      const masked = mascararCPF(cleanCpf);
-      const localVoters = getVotersRegistry();
-      const foundLocal = localVoters.find(v => v.cpfMasked === masked);
-
-      if (foundLocal) {
-        const formatted: VoterData = {
-          name: foundLocal.name || foundLocal.nameMasked || 'Cidadão Eleitor',
-          cpf_masked: foundLocal.cpfMasked,
-          cpf_hash: foundLocal.cpfHash,
-          email: foundLocal.email || '',
-          phone: foundLocal.phone || '',
-          state: foundLocal.state || 'SP',
-          city: foundLocal.city || '',
-          has_voted: foundLocal.hasVoted,
-          poll_id: foundLocal.pollId,
-          created_at: foundLocal.registeredAt,
-        };
-        setVoterProfile(formatted);
-        initVoterProfile(formatted);
-        setCurrentUserRole('voter');
-        sessionStorage.setItem('fatosfakes_voter_session', JSON.stringify(formatted));
-      } else {
-        setVoterError('Nenhum cadastro encontrado para este CPF. Por favor, registre seu voto na página inicial.');
-      }
-    } finally {
-      setVoterLoading(false);
-    }
-  };
-
-  // 2. ATUALIZAÇÃO DO CADASTRO DO CIDADÃO
-  const handleSaveVoterProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!voterProfile) return;
-
-    setIsSavingProfile(true);
-    setProfileSuccessMsg('');
-    setProfileErrorMsg('');
-
-    const targetHash = voterProfile.cpf_hash || voterProfile.cpfHash || '';
-    const targetMasked = voterProfile.cpf_masked || voterProfile.cpfMasked || '';
-
-    try {
-      // 1. Atualiza no Supabase via API
-      const res = await fetch('/api/voter/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          id: voterProfile.id,
-          cpf_hash: targetHash,
-          email: editEmail,
-          phone: editPhone,
-          state: editState,
-          city: editCity,
-        }),
-      });
-      const data = await res.json();
-
-      // 2. Atualiza no localStorage também
-      atualizarEleitorLocal(targetHash || targetMasked, {
-        email: editEmail,
-        phone: editPhone,
-        state: editState,
-        city: editCity,
-      });
-
-      // Atualiza o estado da tela
-      const updatedProfile: VoterData = {
-        ...voterProfile,
-        email: editEmail,
-        phone: editPhone,
-        state: editState,
-        city: editCity,
-      };
-      setVoterProfile(updatedProfile);
-      sessionStorage.setItem('fatosfakes_voter_session', JSON.stringify(updatedProfile));
-
-      setProfileSuccessMsg('✓ Seus dados de contato e localização foram atualizados com sucesso no banco de dados!');
-      setTimeout(() => setProfileSuccessMsg(''), 5000);
-    } catch {
-      // Fallback local se estiver offline
-      atualizarEleitorLocal(targetHash || targetMasked, {
-        email: editEmail,
-        phone: editPhone,
-        state: editState,
-        city: editCity,
-      });
-      setProfileSuccessMsg('✓ Dados atualizados com sucesso localmente!');
-    } finally {
-      setIsSavingProfile(false);
-    }
-  };
-
-  // 3. LOGIN DO ADMINISTRADOR
-  const handleAdminLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setAdminError('');
-    setAdminLoading(true);
-
-    try {
-      const res = await fetch(`/api/admin/voters?key=${encodeURIComponent(adminPass)}`, {
-        headers: {
-          'Authorization': `Bearer ${adminPass}`
-        }
-      });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setCurrentUserRole('admin');
-        sessionStorage.setItem('fatosfakes_admin_auth_token', adminPass);
-        localStorage.setItem('fatosfakes_admin_auth_token', adminPass);
-        setVotersList(data.voters || []);
-        setStats(data.stats || { totalVoters: data.voters?.length || 0, totalBallots: data.voters?.length || 0, statesCount: 0 });
-      } else {
-        if (adminPass === DEFAULT_ADMIN_PASS) {
-          setCurrentUserRole('admin');
-          sessionStorage.setItem('fatosfakes_admin_auth_token', adminPass);
-          loadLocalVotersFallback();
-        } else {
-          setAdminError(data.error || 'Chave de acesso administrativo incorreta.');
-        }
-      }
-    } catch {
-      if (adminPass === DEFAULT_ADMIN_PASS) {
-        setCurrentUserRole('admin');
-        sessionStorage.setItem('fatosfakes_admin_auth_token', adminPass);
         loadLocalVotersFallback();
-      } else {
-        setAdminError('Falha ao autenticar com o servidor.');
       }
+    } catch {
+      loadLocalVotersFallback();
     } finally {
-      setAdminLoading(false);
+      setIsLoadingAdminData(false);
     }
   };
 
@@ -361,31 +198,201 @@ function MinhaAreaContent() {
       created_at: v.registeredAt,
     }));
     setVotersList(formatted);
-    setStats({
-      totalVoters: formatted.length,
-      totalBallots: formatted.length,
-      statesCount: new Set(formatted.map(f => f.state)).size,
-    });
   };
 
-  const fetchAdminData = async (token: string) => {
-    setIsLoadingAdminData(true);
+  // 1. LOGIN EXCLUSIVO POR CPF DO ELEITOR
+  const handleVoterLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVoterError('');
+    setProfileSuccessMsg('');
+
+    const cleanCpf = voterCpf.replace(/\D/g, '');
+    if (!cleanCpf) {
+      setVoterError('Por favor, informe seu CPF para consultar seu cadastro.');
+      return;
+    }
+
+    if (!validarCPF(cleanCpf)) {
+      setVoterError('CPF inválido. Por favor, confira os números digitados.');
+      return;
+    }
+
+    setVoterLoading(true);
+
     try {
-      const res = await fetch(`/api/admin/voters?key=${encodeURIComponent(token)}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      // 1. Consulta no servidor
+      const res = await fetch('/api/voter/profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cpf: cleanCpf }),
       });
       const data = await res.json();
-      if (res.ok && data.success) {
-        setVotersList(data.voters || []);
-        setStats(data.stats || { totalVoters: data.voters?.length || 0, totalBallots: data.voters?.length || 0, statesCount: 0 });
+
+      let targetVoter: VoterData | null = null;
+
+      if (res.ok && data.success && data.voter) {
+        targetVoter = data.voter;
       } else {
-        loadLocalVotersFallback();
+        // Fallback no armazenamento local do navegador
+        const masked = mascararCPF(cleanCpf);
+        const localVoters = getVotersRegistry();
+        const found = localVoters.find(v => v.cpfMasked === masked);
+
+        if (found) {
+          targetVoter = {
+            name: found.name || found.nameMasked || 'Cidadão Eleitor',
+            cpf_masked: found.cpfMasked,
+            cpf_hash: found.cpfHash,
+            email: found.email || '',
+            phone: found.phone || '',
+            state: found.state || 'SP',
+            city: found.city || '',
+            has_voted: found.hasVoted,
+            poll_id: found.pollId,
+            created_at: found.registeredAt,
+          };
+        }
+      }
+
+      if (targetVoter) {
+        setVoterProfile(targetVoter);
+        initVoterProfile(targetVoter);
+        setCurrentUserRole('voter');
+        sessionStorage.setItem('fatosfakes_voter_session', JSON.stringify(targetVoter));
+
+        // Checa se este CPF é o gestor
+        const isAuthorized = checkIsAdminCpf(cleanCpf) || Boolean(sessionStorage.getItem('fatosfakes_admin_auth_token'));
+        if (isAuthorized) {
+          setIsSuperUser(true);
+          loadAdminVotersData();
+        }
+      } else {
+        setVoterError(
+          'Nenhum cadastro encontrado para este CPF. Se você ainda não participou, vote na pesquisa eleitoral na página inicial para ativar seu registro cívico.'
+        );
       }
     } catch {
-      loadLocalVotersFallback();
+      // Fallback local
+      const masked = mascararCPF(cleanCpf);
+      const localVoters = getVotersRegistry();
+      const found = localVoters.find(v => v.cpfMasked === masked);
+
+      if (found) {
+        const targetVoter: VoterData = {
+          name: found.name || found.nameMasked || 'Cidadão Eleitor',
+          cpf_masked: found.cpfMasked,
+          cpf_hash: found.cpfHash,
+          email: found.email || '',
+          phone: found.phone || '',
+          state: found.state || 'SP',
+          city: found.city || '',
+          has_voted: found.hasVoted,
+          poll_id: found.pollId,
+          created_at: found.registeredAt,
+        };
+        setVoterProfile(targetVoter);
+        initVoterProfile(targetVoter);
+        setCurrentUserRole('voter');
+        sessionStorage.setItem('fatosfakes_voter_session', JSON.stringify(targetVoter));
+
+        if (checkIsAdminCpf(cleanCpf)) {
+          setIsSuperUser(true);
+          loadAdminVotersData();
+        }
+      } else {
+        setVoterError('Nenhum cadastro localizado. Participe da votação na página inicial.');
+      }
     } finally {
-      setIsLoadingAdminData(false);
+      setVoterLoading(false);
     }
+  };
+
+  // 2. ATUALIZAÇÃO DO CADASTRO PELO CIDADÃO
+  const handleSaveVoterProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!voterProfile) return;
+
+    setIsSavingProfile(true);
+    setProfileSuccessMsg('');
+    setProfileErrorMsg('');
+
+    const targetHash = voterProfile.cpf_hash || voterProfile.cpfHash || '';
+    const targetMasked = voterProfile.cpf_masked || voterProfile.cpfMasked || '';
+
+    try {
+      await fetch('/api/voter/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: voterProfile.id,
+          cpf_hash: targetHash,
+          email: editEmail,
+          phone: editPhone,
+          state: editState,
+          city: editCity,
+        }),
+      });
+
+      atualizarEleitorLocal(targetHash || targetMasked, {
+        email: editEmail,
+        phone: editPhone,
+        state: editState,
+        city: editCity,
+      });
+
+      const updatedProfile: VoterData = {
+        ...voterProfile,
+        email: editEmail,
+        phone: editPhone,
+        state: editState,
+        city: editCity,
+      };
+      setVoterProfile(updatedProfile);
+      sessionStorage.setItem('fatosfakes_voter_session', JSON.stringify(updatedProfile));
+
+      setProfileSuccessMsg('✓ Seus dados de contato e localização foram atualizados com sucesso no banco de dados!');
+      setTimeout(() => setProfileSuccessMsg(''), 5000);
+    } catch {
+      atualizarEleitorLocal(targetHash || targetMasked, {
+        email: editEmail,
+        phone: editPhone,
+        state: editState,
+        city: editCity,
+      });
+      setProfileSuccessMsg('✓ Dados atualizados com sucesso localmente!');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  // 3. VINCULAR CPF COMO ADMINISTRADOR (DENTRO DO PERFIL)
+  const handleAuthorizeAdminCpf = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminKeyError('');
+
+    if (adminKeyInput.trim() !== DEFAULT_ADMIN_PASS) {
+      setAdminKeyError('Chave de governança incorreta.');
+      return;
+    }
+
+    if (!voterProfile) return;
+
+    const clean = (voterProfile.cpf_masked || voterProfile.cpfMasked || '').replace(/\D/g, '');
+    const currentAdminCpfs: string[] = JSON.parse(localStorage.getItem('fatosfakes_admin_cpfs') || '[]');
+    
+    if (clean && !currentAdminCpfs.includes(clean)) {
+      currentAdminCpfs.push(clean);
+      localStorage.setItem('fatosfakes_admin_cpfs', JSON.stringify(currentAdminCpfs));
+    }
+
+    sessionStorage.setItem('fatosfakes_admin_auth_token', DEFAULT_ADMIN_PASS);
+    localStorage.setItem('fatosfakes_admin_auth_token', DEFAULT_ADMIN_PASS);
+
+    setIsSuperUser(true);
+    setShowAdminKeyModal(false);
+    setAdminKeyInput('');
+    loadAdminVotersData();
+    setActivePortalTab('management');
   };
 
   // Logout
@@ -393,13 +400,12 @@ function MinhaAreaContent() {
     setCurrentUserRole('guest');
     setVoterProfile(null);
     setVoterCpf('');
-    setAdminPass('');
+    setActivePortalTab('profile');
     sessionStorage.removeItem('fatosfakes_voter_session');
     sessionStorage.removeItem('fatosfakes_admin_auth_token');
-    localStorage.removeItem('fatosfakes_admin_auth_token');
   };
 
-  // Filtro de Eleitores no Admin
+  // Filtros da tabela de eleitores
   const filteredVoters = useMemo(() => {
     return votersList.filter(v => {
       const name = (v.name || '').toLowerCase();
@@ -488,21 +494,35 @@ function MinhaAreaContent() {
 
           {currentUserRole !== 'guest' && (
             <div className="flex items-center gap-3">
-              {currentUserRole === 'admin' && (
-                <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Administrador Autenticado
-                </span>
-              )}
-              {currentUserRole === 'voter' && (
-                <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-800 text-slate-300 border border-slate-700">
-                  <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-                  Cidadão Eleitor
-                </span>
+              {isSuperUser && (
+                <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800">
+                  <button
+                    onClick={() => setActivePortalTab('profile')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
+                      activePortalTab === 'profile'
+                        ? 'bg-slate-800 text-white shadow-xs'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>Meu Cadastro</span>
+                  </button>
+                  <button
+                    onClick={() => setActivePortalTab('management')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
+                      activePortalTab === 'management'
+                        ? 'bg-cyan-500 text-slate-950 shadow-sm'
+                        : 'text-cyan-400 hover:text-cyan-300'
+                    }`}
+                  >
+                    <Compass className="w-3.5 h-3.5" />
+                    <span>Gestão &amp; Relatório</span>
+                  </button>
+                </div>
               )}
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-rose-400 transition-colors py-1 px-2.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-rose-500/30"
+                className="flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-rose-400 transition-colors py-1.5 px-3 rounded-lg bg-slate-900 border border-slate-800 hover:border-rose-500/30"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>Sair</span>
@@ -516,12 +536,11 @@ function MinhaAreaContent() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
 
         {/* ============================================================== */}
-        {/* CASO 1: VISITANTE NÃO AUTENTICADO (TELA DE LOGIN UNIFICADA)   */}
+        {/* CASO 1: VISITANTE NÃO AUTENTICADO (100% LIMPO - SEM GESTÃO)   */}
         {/* ============================================================== */}
         {currentUserRole === 'guest' && (
           <div className="max-w-xl mx-auto">
             
-            {/* Header explicativo */}
             <div className="text-center mb-8">
               <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 text-emerald-400 mb-4 shadow-inner">
                 <UserCheck className="w-7 h-7" />
@@ -529,175 +548,118 @@ function MinhaAreaContent() {
               <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
                 Acesso ao Cadastro Cívico
               </h2>
-              <p className="text-slate-400 text-sm mt-2 max-w-md mx-auto">
+              <p className="text-slate-400 text-sm mt-2 max-w-md mx-auto leading-relaxed">
                 Consulte seu comprovante de presença auditável na pesquisa presidencial e mantenha seus dados de contato e localização atualizados.
               </p>
             </div>
 
-            {/* Alternador de Modo de Login (Cidadão vs Gestão) */}
-            <div className="bg-[#0b1524] p-1.5 rounded-xl border border-slate-800/80 mb-6 flex gap-1">
-              <button
-                onClick={() => { setActiveLoginMode('voter'); setVoterError(''); setAdminError(''); }}
-                className={`flex-1 py-2.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all ${
-                  activeLoginMode === 'voter'
-                    ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 shadow-xs'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-                }`}
-              >
-                <UserCheck className="w-4 h-4" />
-                <span>Cidadão / Eleitor (Acessar com CPF)</span>
-              </button>
-              <button
-                onClick={() => { setActiveLoginMode('admin'); setVoterError(''); setAdminError(''); }}
-                className={`py-2.5 px-4 rounded-lg text-xs font-medium flex items-center justify-center gap-2 transition-all ${
-                  activeLoginMode === 'admin'
-                    ? 'bg-slate-800 text-white border border-slate-700 shadow-xs'
-                    : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/40'
-                }`}
-              >
-                <Lock className="w-3.5 h-3.5" />
-                <span>Gestão</span>
-              </button>
-            </div>
-
-            {/* FORMULÁRIO DO CIDADÃO (ELEITOR) */}
-            {activeLoginMode === 'voter' && (
-              <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
-                <form onSubmit={handleVoterLogin} className="space-y-5">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                      CPF do Eleitor Cadastrado
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={voterCpf}
-                        onChange={(e) => setVoterCpf(formatarCPF(e.target.value))}
-                        placeholder="000.000.000-00"
-                        maxLength={14}
-                        className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-4 py-3 text-white text-base font-mono tracking-wider placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
-                        autoFocus
-                      />
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-2">
-                      Digite o mesmo CPF utilizado no momento da sua votação para carregar seus dados.
-                    </p>
+            {/* FORMULÁRIO DO ELEITOR (ÚNICO E LIMPO) */}
+            <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
+              <form onSubmit={handleVoterLogin} className="space-y-5">
+                <div>
+                  <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                    CPF do Eleitor Cadastrado
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={voterCpf}
+                      onChange={(e) => setVoterCpf(formatarCPF(e.target.value))}
+                      placeholder="000.000.000-00"
+                      maxLength={14}
+                      className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-4 py-3 text-white text-base font-mono tracking-wider placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
+                      autoFocus
+                    />
                   </div>
+                  <p className="text-[11px] text-slate-500 mt-2">
+                    Digite o mesmo CPF utilizado no momento da sua votação para carregar seus dados.
+                  </p>
+                </div>
 
-                  {voterError && (
-                    <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
-                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                      <div>
-                        <p className="font-semibold">Aviso de Cadastro</p>
-                        <p className="mt-0.5 text-rose-200/90 leading-relaxed">{voterError}</p>
-                      </div>
+                {voterError && (
+                  <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold">Aviso de Cadastro</p>
+                      <p className="mt-0.5 text-rose-200/90 leading-relaxed">{voterError}</p>
                     </div>
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={voterLoading || !voterCpf.trim()}
+                  className="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold text-sm tracking-wide transition-all shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  {voterLoading ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-slate-900" />
+                      <span>Consultando Cadastro Cívico...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Acessar Meu Cadastro Cívico</span>
+                    </>
                   )}
+                </button>
+              </form>
 
-                  <button
-                    type="submit"
-                    disabled={voterLoading || !voterCpf.trim()}
-                    className="w-full py-3.5 px-4 rounded-xl bg-emerald-500 hover:bg-emerald-400 disabled:bg-slate-800 disabled:text-slate-600 text-slate-950 font-bold text-sm tracking-wide transition-all shadow-lg shadow-emerald-500/10 flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
-                  >
-                    {voterLoading ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin text-slate-900" />
-                        <span>Consultando Cadastro Cívico...</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>Acessar Meu Cadastro Cívico</span>
-                      </>
-                    )}
-                  </button>
-                </form>
-
-                {/* Garantia Cívica & Abaixo-Assinado */}
-                <div className="mt-8 pt-6 border-t border-slate-800/80 space-y-3">
-                  <div className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                      <Shield className="w-3 h-3 text-emerald-400" />
-                    </div>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      <strong className="text-slate-200">Voto 100% Sigiloso na Urna Cega:</strong> Seu voto para presidente não fica vinculado ao seu CPF em nenhum momento.
-                    </p>
+              {/* Garantias de Sigilo e Democracia */}
+              <div className="mt-8 pt-6 border-t border-slate-800/80 space-y-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Shield className="w-3 h-3 text-emerald-400" />
                   </div>
-                  <div className="flex items-start gap-3">
-                    <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
-                      <Check className="w-3 h-3 text-emerald-400" />
-                    </div>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      <strong className="text-slate-200">1 Cidadão = 1 Voto:</strong> O cadastro de presença é como a lista de assinaturas de um abaixo-assinado sério, garantindo legitimidade.
-                    </p>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    <strong className="text-slate-200">Voto 100% Sigiloso na Urna Cega:</strong> Seu voto para presidente não fica vinculado ao seu CPF em nenhum momento.
+                  </p>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                    <Check className="w-3 h-3 text-emerald-400" />
                   </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    <strong className="text-slate-200">1 Cidadão = 1 Voto:</strong> O cadastro de presença é como a lista de assinaturas de um abaixo-assinado sério, garantindo legitimidade.
+                  </p>
                 </div>
               </div>
-            )}
-
-            {/* FORMULÁRIO DE GESTÃO (ADMINISTRADOR) */}
-            {activeLoginMode === 'admin' && (
-              <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
-                <form onSubmit={handleAdminLogin} className="space-y-5">
-                  <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
-                      Chave de Acesso Administrativo
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showAdminPass ? 'text' : 'password'}
-                        value={adminPass}
-                        onChange={(e) => setAdminPass(e.target.value)}
-                        placeholder="Digite a senha mestre..."
-                        className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-4 py-3 pr-11 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
-                        autoFocus
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowAdminPass(!showAdminPass)}
-                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
-                      >
-                        {showAdminPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {adminError && (
-                    <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
-                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                      <span>{adminError}</span>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={adminLoading || !adminPass}
-                    className="w-full py-3.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-emerald-500/50 text-white font-bold text-sm tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
-                  >
-                    {adminLoading ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin text-emerald-400" />
-                        <span>Autenticando Acesso...</span>
-                      </>
-                    ) : (
-                      <>
-                        <KeyRound className="w-4 h-4 text-emerald-400" />
-                        <span>Entrar no Painel Geral de Gestão</span>
-                      </>
-                    )}
-                  </button>
-                </form>
-              </div>
-            )}
+            </div>
 
           </div>
         )}
 
         {/* ============================================================== */}
-        {/* CASO 2: CIDADÃO / ELEITOR LOGADO (PAINEL DO ELEITOR)          */}
+        {/* CASO 2: ELEITOR LOGADO — MEU CADASTRO CÍVICO                   */}
         {/* ============================================================== */}
-        {currentUserRole === 'voter' && voterProfile && (
+        {currentUserRole === 'voter' && voterProfile && activePortalTab === 'profile' && (
           <div className="max-w-3xl mx-auto space-y-6">
+
+            {/* SE O CPF FOR DO ADMINISTRADOR: CARD DESTACADO PARA ABRIR GESTÃO */}
+            {isSuperUser && (
+              <div className="bg-gradient-to-r from-[#0b1c33] to-[#091527] border border-cyan-500/40 rounded-2xl p-5 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shrink-0">
+                    <Compass className="w-5 h-5 text-cyan-400" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Acesso de Governança Habilitado</span>
+                      <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                    </div>
+                    <p className="text-sm font-bold text-white mt-0.5">Seu CPF possui autorização de Gestão da Plataforma</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActivePortalTab('management')}
+                  className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md shrink-0 cursor-pointer"
+                >
+                  <Compass className="w-4 h-4" />
+                  <span>Abrir Painel de Gestão &amp; Geolocalização</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             
             {/* Cartão de Identificação Cívica */}
             <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl relative overflow-hidden">
@@ -778,7 +740,7 @@ function MinhaAreaContent() {
               <form onSubmit={handleSaveVoterProfile} className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   
-                  {/* Nome Completo (Bloqueado para integridade) */}
+                  {/* Nome Completo (Bloqueado) */}
                   <div>
                     <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
                       <span>Nome Completo</span>
@@ -920,268 +882,249 @@ function MinhaAreaContent() {
               </form>
             </div>
 
-            {/* Caixa Educativa de Sigilo e Garantias */}
-            <div className="p-5 rounded-2xl bg-slate-900/50 border border-slate-800/80 text-xs text-slate-400 flex items-start gap-3">
-              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-semibold text-slate-300">
-                  Transparência e Proteção Constitucional de Dados
-                </p>
-                <p className="leading-relaxed">
-                  Suas alterações são salvas diretamente nas tabelas de auditoria de presença. O candidato em quem você votou foi armazenado de forma anônima e desvinculada na urna cega, sendo impossível rastrear seu voto a partir do seu cadastro.
-                </p>
+            {/* Rodapé do Perfil com Acesso Discreto de Auditoria */}
+            <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-500">
+              <div className="flex items-center gap-1.5">
+                <Shield className="w-3.5 h-3.5 text-slate-600" />
+                <span>Auditoria Cívica Paritária · Urna Cega Zero-Knowledge</span>
               </div>
+
+              {!isSuperUser && (
+                <button
+                  onClick={() => setShowAdminKeyModal(true)}
+                  className="text-slate-600 hover:text-slate-400 transition-colors flex items-center gap-1 text-[11px] p-1"
+                  title="Acesso de Governança Interna"
+                >
+                  <Lock className="w-3 h-3" />
+                  <span>Acesso Interno</span>
+                </button>
+              )}
             </div>
 
           </div>
         )}
 
         {/* ============================================================== */}
-        {/* CASO 3: ADMINISTRADOR LOGADO (COM ACESSO AO PAINEL GERAL)      */}
+        {/* CASO 3: GESTÃO & GEOLOCALIZAÇÃO (EXCLUSIVO DA DIRETORIA)       */}
         {/* ============================================================== */}
-        {currentUserRole === 'admin' && (
-          <div className="space-y-6">
+        {currentUserRole === 'voter' && isSuperUser && activePortalTab === 'management' && (
+          <div className="space-y-8">
+            
+            {/* Componente Executivo de Geolocalização & Relatório do CEO */}
+            <GeolocatedReportView 
+              voters={votersList} 
+              activePoll={INITIAL_POLLS[0]} 
+              onExportCSV={handleExportCSV} 
+            />
 
-            {/* Alternador de Abas do Administrador */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#0b1524] p-3 rounded-2xl border border-slate-800">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setAdminActiveTab('overview')}
-                  className={`py-2 px-4 rounded-xl text-xs font-bold flex items-center gap-2 transition-all ${
-                    adminActiveTab === 'overview'
-                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/10'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                  }`}
-                >
-                  <Users className="w-4 h-4" />
-                  <span>Painel Geral de Eleitores ({votersList.length})</span>
-                </button>
-                <button
-                  onClick={() => setAdminActiveTab('profile')}
-                  className={`py-2 px-4 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all ${
-                    adminActiveTab === 'profile'
-                      ? 'bg-slate-800 text-white border border-slate-700'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                  }`}
-                >
-                  <UserCheck className="w-4 h-4" />
-                  <span>Meu Perfil Cívico</span>
-                </button>
-              </div>
-
-              <div className="flex items-center gap-2 text-xs">
-                <button
-                  onClick={() => fetchAdminData(sessionStorage.getItem('fatosfakes_admin_auth_token') || DEFAULT_ADMIN_PASS)}
-                  disabled={isLoadingAdminData}
-                  className="px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 transition-colors flex items-center gap-1.5"
-                  title="Atualizar dados do Supabase"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAdminData ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
-                  <span>Atualizar</span>
-                </button>
-                <button
-                  onClick={handleExportCSV}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 hover:bg-emerald-500/25 text-emerald-400 font-semibold transition-colors flex items-center gap-1.5"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Exportar CSV</span>
-                </button>
-              </div>
-            </div>
-
-            {/* ABA 1: PAINEL GERAL DE AUDITORIA & ELEITORES */}
-            {adminActiveTab === 'overview' && (
-              <div className="space-y-6">
-                
-                {/* Métricas Principais */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                    <div className="flex items-center justify-between text-slate-400 text-xs font-semibold mb-2">
-                      <span>Total de Eleitores Cadastrados</span>
-                      <Users className="w-4 h-4 text-emerald-400" />
-                    </div>
-                    <div className="text-3xl font-black text-white">{stats.totalVoters}</div>
-                    <p className="text-[11px] text-slate-500 mt-1">Lista auditável com 1 voto por CPF</p>
-                  </div>
-
-                  <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                    <div className="flex items-center justify-between text-slate-400 text-xs font-semibold mb-2">
-                      <span>Cédulas na Urna Cega</span>
-                      <Vote className="w-4 h-4 text-cyan-400" />
-                    </div>
-                    <div className="text-3xl font-black text-white">{stats.totalBallots}</div>
-                    <p className="text-[11px] text-slate-500 mt-1">100% de sigilo garantido</p>
-                  </div>
-
-                  <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                    <div className="flex items-center justify-between text-slate-400 text-xs font-semibold mb-2">
-                      <span>Estados da Federação</span>
-                      <Building className="w-4 h-4 text-amber-400" />
-                    </div>
-                    <div className="text-3xl font-black text-white">{stats.statesCount} UFs</div>
-                    <p className="text-[11px] text-slate-500 mt-1">Abrangência territorial nacional</p>
-                  </div>
-
-                  <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-5 shadow-sm">
-                    <div className="flex items-center justify-between text-slate-400 text-xs font-semibold mb-2">
-                      <span>Banco de Dados Supabase</span>
-                      <Database className="w-4 h-4 text-emerald-400" />
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                      <span className="text-base font-bold text-white">Sincronizado</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-1">ebarklhztoerbfjvpnqb</p>
-                  </div>
+            {/* TABELA DE AUDITORIA DE TODOS OS ELEITORES CADASTRADOS */}
+            <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Users className="w-5 h-5 text-emerald-400" />
+                    <span>Lista Geral de Eleitores Cadastrados</span>
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Total de {votersList.length} registros auditáveis de presença na urna cega.
+                  </p>
                 </div>
 
-                {/* Filtros e Busca */}
-                <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-                  <div className="relative w-full sm:max-w-md">
-                    <input
-                      type="text"
-                      value={adminSearch}
-                      onChange={(e) => setAdminSearch(e.target.value)}
-                      placeholder="Buscar por nome, CPF, e-mail, celular ou cidade..."
-                      className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                    />
-                    <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={loadAdminVotersData}
+                    disabled={isLoadingAdminData}
+                    className="py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingAdminData ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
+                    <span>Atualizar</span>
+                  </button>
+                  <button
+                    onClick={handleExportCSV}
+                    className="py-2 px-3.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/30 text-emerald-400 text-xs font-bold flex items-center gap-1.5 transition-colors"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Exportar CSV</span>
+                  </button>
+                </div>
+              </div>
 
-                  <div className="flex items-center gap-3 w-full sm:w-auto">
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
-                      <span>Estado:</span>
-                      <select
-                        value={adminSelectedUf}
-                        onChange={(e) => setAdminSelectedUf(e.target.value)}
-                        className="bg-[#080e18] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
-                      >
-                        <option value="TODAS">Todas as UFs</option>
-                        {BRAZIL_STATES.map(uf => (
-                          <option key={uf} value={uf}>{uf}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <a
-                      href="https://supabase.com/dashboard/project/ebarklhztoerbfjvpnqb/editor"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hidden sm:inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700/80 hover:border-emerald-500/50 text-slate-300 hover:text-white text-xs font-medium transition-colors"
-                    >
-                      <ExternalLink className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Ver no Supabase</span>
-                    </a>
-                  </div>
+              {/* Filtros de Busca e UF */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div className="relative w-full sm:max-w-md">
+                  <input
+                    type="text"
+                    value={adminSearch}
+                    onChange={(e) => setAdminSearch(e.target.value)}
+                    placeholder="Buscar por nome, CPF, e-mail, celular ou cidade..."
+                    className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 </div>
 
-                {/* Tabela de Eleitores */}
-                <div className="bg-[#0b1524] border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="border-b border-slate-800 bg-[#080e18]/80 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
-                          <th className="py-3.5 px-4">Eleitor</th>
-                          <th className="py-3.5 px-4">Contato (E-mail / WhatsApp)</th>
-                          <th className="py-3.5 px-4">Localização</th>
-                          <th className="py-3.5 px-4">Status</th>
-                          <th className="py-3.5 px-4">Hash de Auditoria</th>
-                          <th className="py-3.5 px-4">Registro</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60">
-                        {filteredVoters.length === 0 ? (
-                          <tr>
-                            <td colSpan={6} className="py-8 text-center text-slate-500">
-                              Nenhum eleitor encontrado para os critérios de busca.
+                <div className="flex items-center gap-2 text-xs text-slate-400 w-full sm:w-auto">
+                  <span>Filtrar UF:</span>
+                  <select
+                    value={adminSelectedUf}
+                    onChange={(e) => setAdminSelectedUf(e.target.value)}
+                    className="bg-[#080e18] border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="TODAS">Todas as UFs</option>
+                    {BRAZIL_STATES.map(uf => (
+                      <option key={uf} value={uf}>{uf}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Tabela de Eleitores */}
+              <div className="overflow-x-auto rounded-xl border border-slate-800">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 bg-[#080e18] text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
+                      <th className="py-3 px-4">Eleitor</th>
+                      <th className="py-3 px-4">Contato (E-mail / WhatsApp)</th>
+                      <th className="py-3 px-4">Localização</th>
+                      <th className="py-3 px-4">Status</th>
+                      <th className="py-3 px-4">Hash de Auditoria</th>
+                      <th className="py-3 px-4">Registro</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 bg-[#0b1524]">
+                    {filteredVoters.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center text-slate-500">
+                          Nenhum eleitor encontrado para os critérios de busca.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredVoters.map((voter, index) => {
+                        const hash = voter.cpf_hash || voter.cpfHash || '';
+                        const maskedCpf = voter.cpf_masked || voter.cpfMasked || '***.***.***-**';
+                        const dateStr = voter.created_at || voter.registeredAt;
+                        const formattedDate = dateStr 
+                          ? new Date(dateStr).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+                          : 'Hoje';
+
+                        return (
+                          <tr key={voter.id || index} className="hover:bg-slate-800/30 transition-colors">
+                            <td className="py-3 px-4">
+                              <div className="font-bold text-white text-xs">{voter.name}</div>
+                              <div className="font-mono text-[11px] text-slate-400 mt-0.5">{maskedCpf}</div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="text-slate-300 font-medium">{voter.email || <span className="text-slate-600 italic">Não informado</span>}</div>
+                              <div className="text-slate-400 text-[11px] mt-0.5">{voter.phone || <span className="text-slate-600 italic">Não informado</span>}</div>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="inline-block px-1.5 py-0.5 rounded bg-slate-800 font-bold text-[10px] text-slate-300 mr-1.5 border border-slate-700">
+                                {voter.state}
+                              </span>
+                              <span className="text-slate-300">{voter.city}</span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+                                <Check className="w-3 h-3" />
+                                Confirmado
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 font-mono text-[11px] text-slate-400">
+                              <div className="flex items-center gap-1.5 max-w-[180px]">
+                                <span className="truncate" title={hash}>{hash.slice(0, 16)}...</span>
+                                <button
+                                  onClick={() => copyToClipboard(hash, `hash-${index}`)}
+                                  className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-emerald-400 transition-colors"
+                                  title="Copiar Hash"
+                                >
+                                  {copiedHash === `hash-${index}` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                                </button>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-slate-400 text-[11px]">
+                              {formattedDate}
                             </td>
                           </tr>
-                        ) : (
-                          filteredVoters.map((voter, index) => {
-                            const hash = voter.cpf_hash || voter.cpfHash || '';
-                            const maskedCpf = voter.cpf_masked || voter.cpfMasked || '***.***.***-**';
-                            const dateStr = voter.created_at || voter.registeredAt;
-                            const formattedDate = dateStr 
-                              ? new Date(dateStr).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
-                              : 'Hoje';
-
-                            return (
-                              <tr key={voter.id || index} className="hover:bg-slate-800/30 transition-colors">
-                                <td className="py-3.5 px-4">
-                                  <div className="font-bold text-white text-xs">{voter.name}</div>
-                                  <div className="font-mono text-[11px] text-slate-400 mt-0.5">{maskedCpf}</div>
-                                </td>
-                                <td className="py-3.5 px-4">
-                                  <div className="text-slate-300 font-medium">{voter.email || <span className="text-slate-600 italic">Não informado</span>}</div>
-                                  <div className="text-slate-400 text-[11px] mt-0.5">{voter.phone || <span className="text-slate-600 italic">Não informado</span>}</div>
-                                </td>
-                                <td className="py-3.5 px-4">
-                                  <span className="inline-block px-1.5 py-0.5 rounded bg-slate-800 font-bold text-[10px] text-slate-300 mr-1.5 border border-slate-700">
-                                    {voter.state}
-                                  </span>
-                                  <span className="text-slate-300">{voter.city}</span>
-                                </td>
-                                <td className="py-3.5 px-4">
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
-                                    <Check className="w-3 h-3" />
-                                    Confirmado
-                                  </span>
-                                </td>
-                                <td className="py-3.5 px-4 font-mono text-[11px] text-slate-400">
-                                  <div className="flex items-center gap-1.5 max-w-[180px]">
-                                    <span className="truncate" title={hash}>{hash.slice(0, 16)}...</span>
-                                    <button
-                                      onClick={() => copyToClipboard(hash, `hash-${index}`)}
-                                      className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-emerald-400 transition-colors"
-                                      title="Copiar Hash"
-                                    >
-                                      {copiedHash === `hash-${index}` ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                                    </button>
-                                  </div>
-                                </td>
-                                <td className="py-3.5 px-4 text-slate-400 text-[11px]">
-                                  {formattedDate}
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
               </div>
-            )}
 
-            {/* ABA 2: VISUALIZAR MEU PERFIL CÍVICO (COMO ADMIN) */}
-            {adminActiveTab === 'profile' && (
-              <div className="max-w-2xl mx-auto bg-[#0b1524] border border-slate-800 rounded-2xl p-6 sm:p-8">
-                <h3 className="text-lg font-bold text-white mb-2">Acesso e Credenciais de Administrador</h3>
-                <p className="text-xs text-slate-400 mb-6 leading-relaxed">
-                  Você está autenticado com privilégios de superusuário de governança cívica. Sua sessão permite auditar todos os cadastros, verificar a integridade da urna cega e emitir relatórios para fins de fiscalização eleitoral.
-                </p>
-                <div className="bg-[#080e18] p-4 rounded-xl border border-slate-800 space-y-2 text-xs">
-                  <div className="flex justify-between text-slate-300">
-                    <span className="text-slate-500">Nível de Permissão:</span>
-                    <span className="font-bold text-emerald-400">Auditor-Chefe / Administrador</span>
-                  </div>
-                  <div className="flex justify-between text-slate-300">
-                    <span className="text-slate-500">Projeto Supabase:</span>
-                    <span className="font-mono">ebarklhztoerbfjvpnqb</span>
-                  </div>
-                  <div className="flex justify-between text-slate-300">
-                    <span className="text-slate-500">Sessão Local:</span>
-                    <span className="text-emerald-400 font-semibold">Ativa e Persistente</span>
-                  </div>
-                </div>
-              </div>
-            )}
+            </div>
 
           </div>
         )}
 
       </main>
+
+      {/* MODAL DISCRETO PARA VINCULAR CPF COMO ADMINISTRADOR */}
+      {showAdminKeyModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0b1524] border border-slate-800 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+            <div className="flex items-center gap-2 mb-2 text-cyan-400 text-xs font-bold uppercase tracking-wider">
+              <Compass className="w-4 h-4" />
+              <span>Autenticação de Governança Interna</span>
+            </div>
+            <h3 className="text-lg font-black text-white">
+              Vincular Privilégio de Gestão ao seu CPF
+            </h3>
+            <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+              Informe a chave mestra para autorizar permanentemente o CPF de <strong>{voterProfile?.name}</strong> como gestor da plataforma. A partir de então, você acessará a gestão automaticamente com o seu CPF.
+            </p>
+
+            <form onSubmit={handleAuthorizeAdminCpf} className="mt-5 space-y-4">
+              <div>
+                <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2">
+                  Chave Mestra de Gestão
+                </label>
+                <div className="relative">
+                  <input
+                    type={showKeyText ? 'text' : 'password'}
+                    value={adminKeyInput}
+                    onChange={(e) => setAdminKeyInput(e.target.value)}
+                    placeholder="Digite a chave mestra..."
+                    className="w-full bg-[#080e18] border border-slate-700 focus:border-cyan-500 rounded-xl px-4 py-2.5 pr-11 text-white text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKeyText(!showKeyText)}
+                    className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  >
+                    {showKeyText ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {adminKeyError && (
+                <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  <span>{adminKeyError}</span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowAdminKeyModal(false); setAdminKeyInput(''); setAdminKeyError(''); }}
+                  className="px-4 py-2 rounded-xl text-slate-400 hover:text-white text-xs font-semibold transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md"
+                >
+                  Confirmar e Ativar Gestão
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
