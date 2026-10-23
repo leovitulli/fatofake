@@ -14,6 +14,8 @@ import { INITIAL_POLITICIANS } from '@/data/politicians';
 import { INITIAL_POLLS } from '@/data/polls';
 import { INITIAL_JUDICIAL_PROCESSES } from '@/data/judicialProcesses';
 import { searchOpenWebLive } from '@/lib/clientLiveSearch';
+import { PixDonationSection } from '@/components/PixDonationSection';
+import { PixDonationModal } from '@/components/PixDonationModal';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
@@ -31,7 +33,8 @@ import {
   Scale,
   Globe,
   Lock,
-  UserCheck
+  UserCheck,
+  Heart
 } from 'lucide-react';
 
 export default function HomePage() {
@@ -41,6 +44,7 @@ export default function HomePage() {
   const [selectedVerdict, setSelectedVerdict] = useState<string>('TODOS');
   const [selectedRole, setSelectedRole] = useState<string>('TODOS');
   const [selectedPoliticianId, setSelectedPoliticianId] = useState<string | null>(null);
+  const [showPixModal, setShowPixModal] = useState(false);
 
   // Atalho discreto do Administrador (Ctrl + Shift + A ou Cmd + Shift + A)
   useEffect(() => {
@@ -221,6 +225,7 @@ export default function HomePage() {
         totalChecks={INITIAL_FACT_CHECKS.length}
         totalVotes={totalVotesCount}
         totalProcesses={INITIAL_JUDICIAL_PROCESSES.length}
+        onOpenPix={() => setShowPixModal(true)}
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
@@ -500,6 +505,11 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* SEÇÃO DE APOIO CÍVICO VIA PIX */}
+        <div className="pt-8">
+          <PixDonationSection id="apoie-via-pix" />
+        </div>
+
       </main>
 
       {/* Rodapé Cívico Institucional */}
@@ -516,6 +526,14 @@ export default function HomePage() {
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-6 text-slate-400 font-medium">
+            <button 
+              type="button"
+              onClick={() => setShowPixModal(true)} 
+              className="text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <Heart className="w-3.5 h-3.5 fill-emerald-400" />
+              <span>Apoiar via PIX</span>
+            </button>
             <button onClick={() => setActiveTab('processes')} className="hover:text-white">
               Tribunais &amp; Processos
             </button>
@@ -553,6 +571,12 @@ export default function HomePage() {
           </div>
         </div>
       </footer>
+
+      {/* Modal Rápido de Apoio com Chave PIX */}
+      <PixDonationModal 
+        isOpen={showPixModal} 
+        onClose={() => setShowPixModal(false)} 
+      />
 
     </div>
   );

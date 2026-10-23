@@ -2,7 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ShieldCheck, Vote, Users, Lock, Scale, CheckCircle2, UserCheck } from 'lucide-react';
+import { ShieldCheck, Vote, Users, Lock, Scale, CheckCircle2, UserCheck, Heart } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: 'facts' | 'polls' | 'processes' | 'politicians' | 'security';
@@ -10,9 +10,10 @@ interface HeaderProps {
   totalChecks: number;
   totalVotes: number;
   totalProcesses: number;
+  onOpenPix?: () => void;
 }
 
-export function Header({ activeTab, setActiveTab, totalChecks, totalVotes, totalProcesses }: HeaderProps) {
+export function Header({ activeTab, setActiveTab, totalChecks, totalVotes, totalProcesses, onOpenPix }: HeaderProps) {
   const navItems = [
     {
       id: 'facts' as const,
@@ -64,6 +65,23 @@ export function Header({ activeTab, setActiveTab, totalChecks, totalVotes, total
             <span>Certidões STF &amp; TSE</span>
             <span className="text-slate-700">·</span>
             <span className="text-emerald-400/90 font-medium">Voto 100% Sigiloso</span>
+            <span className="text-slate-700">·</span>
+            <button
+              type="button"
+              onClick={() => {
+                if (onOpenPix) {
+                  onOpenPix();
+                } else {
+                  const el = document.getElementById('apoie-via-pix');
+                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                }
+              }}
+              className="text-emerald-300 hover:text-white font-semibold transition-all flex items-center gap-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 px-2.5 py-0.5 rounded-md border border-emerald-500/40 shadow-xs cursor-pointer active:scale-95"
+              title="Apoie a plataforma com qualquer valor via PIX"
+            >
+              <Heart className="w-3 h-3 fill-emerald-400 text-emerald-400" />
+              <span>Apoiar via PIX</span>
+            </button>
             <span className="text-slate-700">·</span>
             <Link 
               href="/minha-area" 

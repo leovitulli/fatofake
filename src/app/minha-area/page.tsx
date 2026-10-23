@@ -44,6 +44,7 @@ import {
 } from '@/lib/voteService';
 import { INITIAL_POLLS } from '@/data/polls';
 import { GeolocatedReportView } from '@/components/GeolocatedReportView';
+import { PixDonationSection } from '@/components/PixDonationSection';
 
 interface VoterData {
   id?: string;
@@ -771,6 +772,11 @@ function MinhaAreaContent() {
               </div>
             </div>
 
+            {/* Espaço de Apoio Cívico via PIX */}
+            <div className="mt-8">
+              <PixDonationSection id="apoie-via-pix-cadastro" />
+            </div>
+
           </div>
         )}
 
@@ -1044,6 +1050,11 @@ function MinhaAreaContent() {
                   <span>Acesso Interno</span>
                 </button>
               )}
+            </div>
+
+            {/* Espaço de Apoio Cívico via PIX */}
+            <div className="pt-4">
+              <PixDonationSection id="apoie-via-pix-eleitor" />
             </div>
 
           </div>
