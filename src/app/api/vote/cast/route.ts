@@ -111,7 +111,21 @@ export async function POST(request: Request) {
       console.warn('Erro ao inserir cédula no poll_votes:', ballotError.message);
     }
 
-    // 3. Tenta registrar o eleitor na lista de presença cívica
+    // 3. Registra o eleitor na lista de presença cívica da nuvem (Supabase)
+    const voterRegistrationData = {
+      id: `voter-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      name: voter.nome,
+      cpf_masked: maskedCpf,
+      cpf_hash: cpfHash,
+      email: voter.email || null,
+      phone: voter.phone || null,
+      state: voter.uf || state || 'SP',
+      city: voter.cidade || '',
+      has_voted: true,
+      poll_id: pollId,
+      created_at: now.toISOString(),
+    };
+
     try {
       await supabase
         .from('voters_registry')
@@ -128,6 +142,43 @@ export async function POST(request: Request) {
         });
     } catch {
       // Caso a tabela voters_registry ainda não tenha sido criada no Supabase SQL editor
+    }
+
+    // 3.1 Sincronização em voters-cloud-registry (garante visibilidade mesmo se voters_registry não foi criada)
+    try {
+      const { data: cloudReg } = await supabase
+        .from('election_polls')
+        .select('*')
+        .eq('id', 'voters-cloud-registry')
+        .single();
+
+      if (cloudReg) {
+        const existingList = Array.isArray(cloudReg.candidates) ? cloudReg.candidates : [];
+        const filtered = existingList.filter((v: any) => (v.cpf_hash || v.cpfHash) !== cpfHash);
+        filtered.unshift(voterRegistrationData);
+        await supabase
+          .from('election_polls')
+          .update({
+            total_votes: filtered.length,
+            candidates: filtered,
+          })
+          .eq('id', 'voters-cloud-registry');
+      } else {
+        await supabase
+          .from('election_polls')
+          .insert({
+            id: 'voters-cloud-registry',
+            title: 'Registro Central de Eleitores Cívicos',
+            role: 'REGISTRY',
+            state: 'BR',
+            round: '2º Turno',
+            survey_date: 'Outubro 2026',
+            total_votes: 1,
+            candidates: [voterRegistrationData],
+          });
+      }
+    } catch (syncErr) {
+      console.warn('Sincronização cloud registry:', syncErr);
     }
 
     // 4. Atualiza os totais consolidados na tabela election_polls do Supabase

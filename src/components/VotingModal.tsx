@@ -18,7 +18,10 @@ import {
   Info,
   PenTool,
   ShieldAlert,
-  Shield
+  Shield,
+  ArrowRight,
+  RotateCcw,
+  Check
 } from 'lucide-react';
 import { 
   formatarCPF, 
@@ -46,6 +49,7 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
   const [errorMsg, setErrorMsg] = useState('');
   const [receipt, setReceipt] = useState<VoteResult['auditReceipt'] | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [voteStep, setVoteStep] = useState<'form' | 'urna_confirm'>('form');
 
   // Trava scroll do body e escuta tecla Escape para fechar
   useEffect(() => {
@@ -65,6 +69,38 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [onClose]);
+
+  // Síntese sonora oficial da Urna Eletrônica (Web Audio API - Pi-pi-pi-piiiim)
+  const playUrnaSound = () => {
+    if (typeof window === 'undefined') return;
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+
+      const tones = [
+        { freq: 659.25, start: 0, duration: 0.08 },
+        { freq: 659.25, start: 0.11, duration: 0.08 },
+        { freq: 659.25, start: 0.22, duration: 0.08 },
+        { freq: 880.00, start: 0.33, duration: 0.32 },
+      ];
+
+      tones.forEach(({ freq, start, duration }) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+        gain.gain.setValueAtTime(0.18, ctx.currentTime + start);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + start);
+        osc.stop(ctx.currentTime + start + duration);
+      });
+    } catch {
+      // Som não-bloqueante
+    }
+  };
 
   // Estados do Escudo Anti-Robô / Anti-IA
   const openedAtRef = useRef<number>(Date.now());
@@ -87,7 +123,8 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
     setErrorMsg('');
   };
 
-  const handleConfirmVote = async (e: React.FormEvent) => {
+  // Passo 1: Validação dos dados civis e avanço para a Urna
+  const handleProceedToUrna = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
@@ -116,9 +153,17 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
       return;
     }
 
+    setVoteStep('urna_confirm');
+  };
+
+  // Passo 2: Confirmação definitiva e depósito seguro na Urna Cega
+  const handleFinalSubmitVote = async () => {
+    setErrorMsg('');
     setLoading(true);
 
     try {
+      playUrnaSound();
+
       const res = await registrarVotoSeguro({
         pollId: poll.id,
         candidateId: candidate.id,
@@ -141,6 +186,7 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
 
       if (!res.success) {
         setErrorMsg(res.message);
+        setVoteStep('form');
         setLoading(false);
         return;
       }
@@ -149,6 +195,7 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
       onVoteCastSuccess();
     } catch {
       setErrorMsg('Ocorreu um erro ao processar o voto seguro. Tente novamente.');
+      setVoteStep('form');
     } finally {
       setLoading(false);
     }
@@ -242,9 +289,147 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
                 Concluir e Ver Resultados da Pesquisa
               </button>
             </div>
+          ) : voteStep === 'urna_confirm' ? (
+            /* TELA DA URNA ELETRÔNICA CÍVICA (Confirmação interativa com botões oficiais e áudio) */
+            <div className="space-y-5 animate-in fade-in duration-200">
+              {/* Moldura da Urna Eletrônica */}
+              <div className="bg-[#f3f1ec] text-slate-900 rounded-2xl p-4 sm:p-6 border-4 border-slate-300 shadow-xl relative overflow-hidden font-sans">
+                
+                {/* Cabeçalho da Urna */}
+                <div className="border-b-2 border-slate-300 pb-3 mb-4 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 uppercase block">
+                      Justiça Eleitoral Cívica
+                    </span>
+                    <span className="text-xs sm:text-sm font-extrabold text-slate-900 tracking-tight">
+                      SEU VOTO PARA: {poll.role.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 px-2.5 py-1 bg-emerald-100 border border-emerald-300 rounded-md">
+                    <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+                    <span className="text-[10px] font-black text-emerald-800 tracking-wider">URNA PRONTA</span>
+                  </div>
+                </div>
+
+                {/* Conteúdo Principal: Dados do Candidato + Foto */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+                  
+                  {/* Dados Textuais e Dígitos */}
+                  <div className="sm:col-span-8 space-y-3">
+                    
+                    {/* Número do Candidato em Caixas de Dígitos da Urna */}
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block mb-1">
+                        Número:
+                      </span>
+                      <div className="flex items-center gap-2">
+                        {candidate.number.split('').map((digit, idx) => (
+                          <div
+                            key={idx}
+                            className="w-12 h-14 sm:w-14 sm:h-16 border-2 border-slate-800 bg-white text-slate-950 font-mono font-black text-3xl sm:text-4xl flex items-center justify-center rounded-lg shadow-sm"
+                          >
+                            {digit}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Nome do Candidato */}
+                    <div className="pt-1">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block">
+                        Nome:
+                      </span>
+                      <span className="text-lg sm:text-xl font-black text-slate-950 leading-tight block">
+                        {candidate.name}
+                      </span>
+                      <span className="text-sm font-bold text-emerald-700 block">
+                        ({candidate.popularName})
+                      </span>
+                    </div>
+
+                    {/* Partido */}
+                    <div>
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide block">
+                        Partido:
+                      </span>
+                      <span className="text-sm font-bold text-slate-800 block">
+                        {candidate.party}
+                      </span>
+                    </div>
+
+                  </div>
+
+                  {/* Foto Oficial do Candidato */}
+                  <div className="sm:col-span-4 flex flex-col items-center sm:items-end justify-center">
+                    <div className="w-28 h-36 sm:w-32 sm:h-40 bg-white border-2 border-slate-700 rounded-lg overflow-hidden shadow-md relative">
+                      <img
+                        src={candidate.photoUrl}
+                        alt={candidate.name}
+                        className="w-full h-full object-cover"
+                      />
+                      <div className="absolute bottom-0 inset-x-0 bg-slate-900/90 text-[9px] font-bold text-white text-center py-0.5">
+                        {poll.role}
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Rodapé de Instruções da Urna */}
+                <div className="border-t-2 border-slate-300 pt-3 mt-4 text-[11px] text-slate-600 space-y-1">
+                  <div className="font-bold text-slate-700">Aperte a tecla:</div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-300">
+                      CONFIRMA
+                    </span>
+                    <span>para CONFIRMAR este voto</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-black text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">
+                      CORRIGIR
+                    </span>
+                    <span>para REINICIAR ou alterar dados</span>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Botões do Teclado da Urna */}
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setVoteStep('form')}
+                  disabled={loading}
+                  className="py-3.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>CORRIGIR</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleFinalSubmitVote}
+                  disabled={loading}
+                  className="py-3.5 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-black text-xs sm:text-sm uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {loading ? (
+                    <span className="animate-pulse">Gravando Voto...</span>
+                  ) : (
+                    <>
+                      <Check className="w-5 h-5" />
+                      <span>CONFIRMA</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <p className="text-center text-[11px] text-slate-400">
+                Ao clicar em CONFIRMA, o som característico da urna é reproduzido e seu comprovante de auditoria cívica é gerado.
+              </p>
+            </div>
           ) : (
             /* Formulário de Voto com Explicação Visual Decorativa */
-            <form onSubmit={handleConfirmVote} className="space-y-5">
+            <form onSubmit={handleProceedToUrna} className="space-y-5">
               
               {/* Cartão do Candidato Selecionado */}
               <div className="flex items-center gap-3.5 p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
@@ -483,17 +668,10 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
                 </button>
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="w-full sm:w-2/3 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full sm:w-2/3 py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs sm:text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  {loading ? (
-                    <span>Registrando na Urna Cega...</span>
-                  ) : (
-                    <>
-                      <Lock className="w-4 h-4" />
-                      <span>Confirmar Voto Seguro &amp; Sigiloso</span>
-                    </>
-                  )}
+                  <span>Avançar para a Urna Eletrônica</span>
+                  <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
 
