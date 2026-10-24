@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   const authHeader = request.headers.get('authorization') || '';
   const token = authHeader.replace(/^Bearer\s+/i, '') || searchParams.get('key') || searchParams.get('cpf') || '';
 
-  const DEVELOPER_ADMIN_CPF = (process.env.ADMIN_DEVELOPER_CPF || process.env.NEXT_PUBLIC_ADMIN_CPF || '22487527846').replace(/\D/g, '');
+  const DEVELOPER_ADMIN_CPF = (process.env.ADMIN_DEVELOPER_CPF || process.env.NEXT_PUBLIC_ADMIN_CPF || '22135939811').replace(/\D/g, '');
   const cleanTokenCpf = token.replace(/\D/g, '');
   const adminPassword = process.env.ADMIN_PASSWORD || 'admin@fatosfakes2026';
 

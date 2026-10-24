@@ -31,13 +31,15 @@ import {
   FileCheck,
   ChevronRight,
   Send,
-  Heart
+  Heart,
+  User
 } from 'lucide-react';
 import { 
   validarCPF, 
   formatarCPF, 
   mascararCPF, 
   formatarTelefone, 
+  ofuscarNome,
   getVotersRegistry, 
   atualizarEleitorLocal
 } from '@/lib/voteService';
@@ -93,6 +95,7 @@ function MinhaAreaContent() {
 
   // Perfil do Cidadão Logado
   const [voterProfile, setVoterProfile] = useState<VoterData | null>(null);
+  const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editState, setEditState] = useState('');
@@ -125,7 +128,7 @@ function MinhaAreaContent() {
   const [pixFeedback, setPixFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   // CPF do desenvolvedor / administrador exclusivo (configurável via .env)
-  const DEVELOPER_ADMIN_CPF = (process.env.NEXT_PUBLIC_ADMIN_CPF || '22487527846').replace(/\D/g, '');
+  const DEVELOPER_ADMIN_CPF = (process.env.NEXT_PUBLIC_ADMIN_CPF || '22135939811').replace(/\D/g, '');
 
   // Helper para verificar se um CPF é estritamente o do desenvolvedor/administrador
   const checkIsAdminCpf = (cleanCpf: string): boolean => {
@@ -312,13 +315,14 @@ function MinhaAreaContent() {
 
   const initVoterProfile = (data: VoterData) => {
     setVoterProfile(data);
+    setEditName(data.name || '');
     setEditEmail(data.email || '');
     setEditPhone(data.phone || '');
     setEditState(data.state || 'SP');
     setEditCity(data.city || '');
   };
 
-  // Carrega dados para a Gestão
+  // Carrega dados para a Gestão mesclando registros do Supabase com o registro local
   const loadAdminVotersData = async (adminCpf?: string) => {
     setIsLoadingAdminData(true);
     const token = adminCpf || DEVELOPER_ADMIN_CPF;
@@ -327,8 +331,53 @@ function MinhaAreaContent() {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      if (res.ok && data.success && data.voters) {
-        setVotersList(data.voters);
+      const localVoters = getVotersRegistry();
+
+      // Mapa para mesclar registros sem duplicidade e sem perder nomes autênticos
+      const mergedMap = new Map<string, VoterData>();
+
+      // 1. Carrega eleitores locais (possuem o nome real preenchido pelo eleitor)
+      localVoters.forEach((lv, i) => {
+        const key = lv.cpfHash || lv.cpfMasked || `local-${i}`;
+        mergedMap.set(key, {
+          id: `local-${i}`,
+          name: lv.name || lv.nameMasked || 'Cidadão Eleitor',
+          cpf_masked: lv.cpfMasked,
+          cpf_hash: lv.cpfHash,
+          email: lv.email || '',
+          phone: lv.phone || '',
+          state: lv.state || 'SP',
+          city: lv.city || '',
+          has_voted: lv.hasVoted ?? true,
+          poll_id: lv.pollId,
+          created_at: lv.registeredAt,
+        });
+      });
+
+      // 2. Mescla registros retornados do Supabase
+      if (res.ok && data.success && Array.isArray(data.voters)) {
+        data.voters.forEach((sv: any, idx: number) => {
+          const key = (sv.cpf_hash || sv.cpfHash || sv.cpf_masked || sv.cpfMasked || sv.id || `server-${idx}`) as string;
+          const existing = mergedMap.get(key);
+          const serverHasRealName = sv.name && sv.name !== 'Eleitor Cívico Auditado' && !sv.name.includes('Desenvolvedor') && !sv.name.includes('Diretor');
+
+          if (existing) {
+            mergedMap.set(key, {
+              ...existing,
+              ...sv,
+              name: existing.name && existing.name !== 'Cidadão Eleitor' && !existing.name.includes('Auditado')
+                ? existing.name
+                : (serverHasRealName ? sv.name : existing.name),
+            });
+          } else {
+            mergedMap.set(key, sv);
+          }
+        });
+      }
+
+      const mergedList = Array.from(mergedMap.values());
+      if (mergedList.length > 0) {
+        setVotersList(mergedList);
       } else {
         loadLocalVotersFallback();
       }
@@ -378,27 +427,56 @@ function MinhaAreaContent() {
 
     setVoterLoading(true);
 
+    const masked = mascararCPF(cleanCpf);
+    const localVoters = getVotersRegistry();
+    const foundLocal = localVoters.find(v => v.cpfMasked === masked);
+
     try {
-      // 1. Consulta no servidor
+      // 1. Consulta no servidor informando o nome local já existente (se houver) para evitar perda de nome
       const res = await fetch('/api/voter/profile', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cpf: cleanCpf }),
+        body: JSON.stringify({ 
+          cpf: cleanCpf,
+          clientName: foundLocal?.name || undefined,
+          clientEmail: foundLocal?.email || undefined,
+          clientPhone: foundLocal?.phone || undefined,
+          clientState: foundLocal?.state || undefined,
+          clientCity: foundLocal?.city || undefined,
+        }),
       });
       const data = await res.json();
 
       let targetVoter: VoterData | null = null;
 
       if (res.ok && data.success && data.voter) {
-        targetVoter = data.voter;
+        targetVoter = data.voter as VoterData;
+        // Se temos o nome real local autêntico e o servidor retornou genérico, preserva o nome autêntico!
+        if (targetVoter && foundLocal?.name && (!targetVoter.name || targetVoter.name === 'Eleitor Cívico Auditado' || targetVoter.name === 'Desenvolvedor' || targetVoter.name === 'Cidadão Eleitor')) {
+          targetVoter.name = foundLocal.name;
+        }
+      } else if (foundLocal) {
+        // Fallback imediato no armazenamento local do navegador com o nome autêntico
+        targetVoter = {
+          name: foundLocal.name || foundLocal.nameMasked || 'Cidadão Eleitor',
+          cpf_masked: foundLocal.cpfMasked,
+          cpf_hash: foundLocal.cpfHash,
+          email: foundLocal.email || '',
+          phone: foundLocal.phone || '',
+          state: foundLocal.state || 'SP',
+          city: foundLocal.city || '',
+          has_voted: foundLocal.hasVoted,
+          poll_id: foundLocal.pollId,
+          created_at: foundLocal.registeredAt,
+        };
       } else if (checkIsAdminCpf(cleanCpf)) {
         // Acesso exclusivo do desenvolvedor / administrador oficial da plataforma
         targetVoter = {
           id: 'admin-master-voter',
-          name: 'Desenvolvedor / Administrador',
-          cpf_masked: mascararCPF(cleanCpf),
+          name: 'Desenvolvedor',
+          cpf_masked: masked,
           cpf_hash: 'hash_fatosfakes_admin_' + cleanCpf,
-          email: 'admin@fatosfakes2026.org',
+          email: '',
           phone: '',
           state: 'BR',
           city: 'Painel Central',
@@ -407,26 +485,6 @@ function MinhaAreaContent() {
           created_at: new Date().toISOString(),
           is_admin: true,
         };
-      } else {
-        // Fallback no armazenamento local do navegador
-        const masked = mascararCPF(cleanCpf);
-        const localVoters = getVotersRegistry();
-        const found = localVoters.find(v => v.cpfMasked === masked);
-
-        if (found) {
-          targetVoter = {
-            name: found.name || found.nameMasked || 'Cidadão Eleitor',
-            cpf_masked: found.cpfMasked,
-            cpf_hash: found.cpfHash,
-            email: found.email || '',
-            phone: found.phone || '',
-            state: found.state || 'SP',
-            city: found.city || '',
-            has_voted: found.hasVoted,
-            poll_id: found.pollId,
-            created_at: found.registeredAt,
-          };
-        }
       }
 
       if (targetVoter) {
@@ -451,22 +509,18 @@ function MinhaAreaContent() {
       }
     } catch (fetchErr: any) {
       // Fallback local
-      const masked = mascararCPF(cleanCpf);
-      const localVoters = getVotersRegistry();
-      const found = localVoters.find(v => v.cpfMasked === masked);
-
-      if (found) {
+      if (foundLocal) {
         const targetVoter: VoterData = {
-          name: found.name || found.nameMasked || 'Cidadão Eleitor',
-          cpf_masked: found.cpfMasked,
-          cpf_hash: found.cpfHash,
-          email: found.email || '',
-          phone: found.phone || '',
-          state: found.state || 'SP',
-          city: found.city || '',
-          has_voted: found.hasVoted,
-          poll_id: found.pollId,
-          created_at: found.registeredAt,
+          name: foundLocal.name || foundLocal.nameMasked || 'Cidadão Eleitor',
+          cpf_masked: foundLocal.cpfMasked,
+          cpf_hash: foundLocal.cpfHash,
+          email: foundLocal.email || '',
+          phone: foundLocal.phone || '',
+          state: foundLocal.state || 'SP',
+          city: foundLocal.city || '',
+          has_voted: foundLocal.hasVoted,
+          poll_id: foundLocal.pollId,
+          created_at: foundLocal.registeredAt,
         };
         setVoterProfile(targetVoter);
         initVoterProfile(targetVoter);
@@ -481,10 +535,10 @@ function MinhaAreaContent() {
       } else if (checkIsAdminCpf(cleanCpf)) {
         const adminVoter: VoterData = {
           id: 'admin-master-voter',
-          name: 'Desenvolvedor / Administrador',
+          name: 'Desenvolvedor',
           cpf_masked: masked,
           cpf_hash: 'hash_fatosfakes_admin_' + cleanCpf,
-          email: 'admin@fatosfakes2026.org',
+          email: '',
           phone: '',
           state: 'BR',
           city: 'Painel Central',
@@ -520,6 +574,7 @@ function MinhaAreaContent() {
 
     const targetHash = voterProfile.cpf_hash || voterProfile.cpfHash || '';
     const targetMasked = voterProfile.cpf_masked || voterProfile.cpfMasked || '';
+    const newName = editName.trim() || voterProfile.name;
 
     try {
       await fetch('/api/voter/profile', {
@@ -528,6 +583,8 @@ function MinhaAreaContent() {
         body: JSON.stringify({
           id: voterProfile.id,
           cpf_hash: targetHash,
+          cpf_masked: targetMasked,
+          name: newName,
           email: editEmail,
           phone: editPhone,
           state: editState,
@@ -536,6 +593,8 @@ function MinhaAreaContent() {
       });
 
       atualizarEleitorLocal(targetHash || targetMasked, {
+        name: newName,
+        nameMasked: ofuscarNome(newName),
         email: editEmail,
         phone: editPhone,
         state: editState,
@@ -544,6 +603,7 @@ function MinhaAreaContent() {
 
       const updatedProfile: VoterData = {
         ...voterProfile,
+        name: newName,
         email: editEmail,
         phone: editPhone,
         state: editState,
@@ -552,15 +612,28 @@ function MinhaAreaContent() {
       setVoterProfile(updatedProfile);
       sessionStorage.setItem('fatosfakes_voter_session', JSON.stringify(updatedProfile));
 
-      setProfileSuccessMsg('✓ Seus dados de contato e localização foram atualizados com sucesso no banco de dados!');
+      setProfileSuccessMsg('✓ Seus dados cadastrais foram atualizados com sucesso!');
       setTimeout(() => setProfileSuccessMsg(''), 5000);
     } catch {
       atualizarEleitorLocal(targetHash || targetMasked, {
+        name: newName,
+        nameMasked: ofuscarNome(newName),
         email: editEmail,
         phone: editPhone,
         state: editState,
         city: editCity,
       });
+
+      const updatedProfile: VoterData = {
+        ...voterProfile,
+        name: newName,
+        email: editEmail,
+        phone: editPhone,
+        state: editState,
+        city: editCity,
+      };
+      setVoterProfile(updatedProfile);
+      sessionStorage.setItem('fatosfakes_voter_session', JSON.stringify(updatedProfile));
       setProfileSuccessMsg('✓ Dados atualizados com sucesso localmente!');
     } finally {
       setIsSavingProfile(false);
@@ -885,6 +958,12 @@ function MinhaAreaContent() {
                       <CheckCircle2 className="w-3 h-3" />
                       Cadastro Cívico Autenticado
                     </span>
+                    {isSuperUser && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+                        <Compass className="w-3 h-3" />
+                        Desenvolvedor Oficial
+                      </span>
+                    )}
                     <span className="text-xs text-slate-500 font-mono">
                       {voterProfile.cpf_masked || voterProfile.cpfMasked}
                     </span>
@@ -963,20 +1042,21 @@ function MinhaAreaContent() {
               <form onSubmit={handleSaveVoterProfile} className="space-y-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   
-                  {/* Nome Completo (Bloqueado) */}
+                  {/* Nome Completo (Editável para Correção) */}
                   <div>
-                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2 flex items-center justify-between">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-slate-300 mb-2 flex items-center justify-between">
                       <span>Nome Completo</span>
-                      <span className="text-[10px] text-slate-500 font-normal">Registro Travado</span>
+                      <span className="text-[10px] text-emerald-400/80 font-normal">Nome de Registro</span>
                     </label>
                     <div className="relative">
                       <input
                         type="text"
-                        value={voterProfile.name}
-                        disabled
-                        className="w-full bg-[#080e18]/60 border border-slate-800 rounded-xl px-4 py-2.5 text-slate-400 text-sm font-medium cursor-not-allowed select-none"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        placeholder="Seu nome completo..."
+                        className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-4 py-2.5 text-white text-sm placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors"
                       />
-                      <Lock className="w-3.5 h-3.5 text-slate-600 absolute right-3.5 top-1/2 -translate-y-1/2" />
+                      <User className="w-4 h-4 text-slate-500 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     </div>
                   </div>
 
