@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Candidate, ElectionPoll } from '@/types';
 import { 
   X, 
@@ -44,6 +45,26 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [receipt, setReceipt] = useState<VoteResult['auditReceipt'] | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Trava scroll do body e escuta tecla Escape para fechar
+  useEffect(() => {
+    setMounted(true);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
 
   // Estados do Escudo Anti-Robô / Anti-IA
   const openedAtRef = useRef<number>(Date.now());
@@ -133,9 +154,21 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/75 backdrop-blur-sm animate-fadeIn overflow-y-auto">
-      <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col">
+  if (!mounted) return null;
+
+  return createPortal(
+    <div 
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-fadeIn overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[92vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Top Header Editorial */}
         <div className="bg-[#0b1524] text-white p-4 sm:p-5 flex items-center justify-between border-b border-slate-800 shrink-0">
@@ -469,6 +502,7 @@ export function VotingModal({ poll, candidate, onClose, onVoteCastSuccess }: Vot
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

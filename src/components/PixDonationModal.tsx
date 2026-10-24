@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   X, 
   Heart, 
@@ -21,8 +22,31 @@ interface PixDonationModalProps {
 
 export function PixDonationModal({ isOpen, onClose }: PixDonationModalProps) {
   const [copied, setCopied] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  if (!isOpen) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen || !mounted) return null;
 
   const handleCopyPix = () => {
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -32,9 +56,19 @@ export function PixDonationModal({ isOpen, onClose }: PixDonationModalProps) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-sm animate-fadeIn">
-      <div className="relative w-full max-w-lg bg-[#0b1728] border border-emerald-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl overflow-hidden text-white my-auto max-h-[92vh] overflow-y-auto">
+  return createPortal(
+    <div 
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-3 sm:p-6 bg-slate-950/85 backdrop-blur-md animate-fadeIn overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="relative w-full max-w-lg bg-[#0b1728] border border-emerald-500/30 rounded-3xl p-6 sm:p-8 shadow-2xl overflow-hidden text-white my-auto max-h-[92vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
         
         {/* Glow de fundo */}
         <div className="absolute -top-24 -right-24 w-60 h-60 rounded-full bg-emerald-500/15 blur-3xl pointer-events-none" />
@@ -145,6 +179,7 @@ export function PixDonationModal({ isOpen, onClose }: PixDonationModalProps) {
         </div>
 
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

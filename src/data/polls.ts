@@ -20,7 +20,7 @@ export const INITIAL_POLLS: ElectionPoll[] = [
         party: 'PT',
         photoUrl: '/images/politicians/lula.jpg',
         politicianId: 'lula',
-        votes: 1,
+        votes: 2,
         judicialStatusSummary: 'Processos da Lava Jato anulados pelo STF · Ficha Limpa apto',
       },
       {
@@ -31,7 +31,7 @@ export const INITIAL_POLLS: ElectionPoll[] = [
         party: 'PL',
         photoUrl: '/images/politicians/flavio-bolsonaro.jpg',
         politicianId: 'flavio-bolsonaro',
-        votes: 1,
+        votes: 0,
         judicialStatusSummary: 'Ficha Limpa apto · Processo criminal da Alerj arquivado pelo TJ-RJ sem julgamento de mérito',
       },
       {

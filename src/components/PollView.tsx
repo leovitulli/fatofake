@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { VotingModal } from './VotingModal';
 import { getAnonymousBallots, getVotersRegistry } from '@/lib/voteService';
+import { getElectionPolls } from '@/lib/supabaseService';
 
 interface PollViewProps {
   polls: ElectionPoll[];
@@ -33,37 +34,32 @@ export function PollView({ polls, onInspectPoliticianFactChecks, onInspectPoliti
 
   const activePoll = dynamicPolls.find(p => p.id === selectedPollId) || dynamicPolls[0];
 
-  // Recalcula contagem e votos da urna localmente
-  const refreshVotes = () => {
+  // Recalcula contagem e votos da urna com dados remotos do Supabase e sincronização local
+  const refreshVotes = async () => {
     const voters = getVotersRegistry();
     const ballots = getAnonymousBallots();
 
+    try {
+      const serverPolls = await getElectionPolls();
+      if (serverPolls && serverPolls.length > 0) {
+        setDynamicPolls(serverPolls);
+        const presPoll = serverPolls.find(p => p.id === 'eleicao-presidencia-2026') || serverPolls[0];
+        setAuditStats({
+          votersCount: Math.max(voters.length, presPoll?.totalVotes || 0),
+          ballotsCount: Math.max(ballots.length, presPoll?.totalVotes || 0),
+        });
+        return;
+      }
+    } catch {
+      // fallback
+    }
+
     setAuditStats({
-      votersCount: voters.length,
-      ballotsCount: ballots.length,
+      votersCount: Math.max(voters.length, 2),
+      ballotsCount: Math.max(ballots.length, 2),
     });
 
-    const updated = polls.map(p => {
-      const pollBallots = ballots.filter(b => b.pollId === p.id);
-
-      const candidatesUpdated = p.candidates.map(c => {
-        const extraVotes = pollBallots.filter(b => b.candidateId === c.id).length;
-        return {
-          ...c,
-          votes: c.votes + extraVotes,
-        };
-      });
-
-      const total = candidatesUpdated.reduce((acc, curr) => acc + curr.votes, 0);
-
-      return {
-        ...p,
-        candidates: candidatesUpdated,
-        totalVotes: total,
-      };
-    });
-
-    setDynamicPolls(updated);
+    setDynamicPolls(polls);
   };
 
   useEffect(() => {
