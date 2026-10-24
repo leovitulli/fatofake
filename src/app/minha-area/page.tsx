@@ -329,53 +329,59 @@ function MinhaAreaContent() {
     setIsLoadingAdminData(true);
     const token = adminCpf || DEVELOPER_ADMIN_CPF;
     try {
-      const res = await fetch(`/api/admin/voters?cpf=${encodeURIComponent(token)}`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+      const res = await fetch(`/api/admin/voters?cpf=${encodeURIComponent(token)}&t=${Date.now()}`, {
+        headers: { 
+          'Authorization': `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
+        cache: 'no-store'
       });
       const data = await res.json();
       const localVoters = getVotersRegistry();
 
-      // Mapa para mesclar registros sem duplicidade e sem perder nomes autênticos
+      // Mapa para mesclar registros: Nuvem Supabase como Fonte Primária de Verdade
       const mergedMap = new Map<string, VoterData>();
 
-      // 1. Carrega eleitores locais (possuem o nome real preenchido pelo eleitor)
-      localVoters.forEach((lv, i) => {
-        const key = lv.cpfHash || lv.cpfMasked || `local-${i}`;
-        mergedMap.set(key, {
-          id: `local-${i}`,
-          name: lv.name || lv.nameMasked || 'Cidadão Eleitor',
-          cpf_masked: lv.cpfMasked,
-          cpf_hash: lv.cpfHash,
-          email: lv.email || '',
-          phone: lv.phone || '',
-          state: lv.state || 'SP',
-          city: lv.city || '',
-          has_voted: lv.hasVoted ?? true,
-          poll_id: lv.pollId,
-          created_at: lv.registeredAt,
-        });
-      });
-
-      // 2. Mescla registros retornados do Supabase
+      // 1. Carrega PRIMEIRO os registros oficiais da Nuvem Supabase
       if (res.ok && data.success && Array.isArray(data.voters)) {
         data.voters.forEach((sv: any, idx: number) => {
           const key = (sv.cpf_hash || sv.cpfHash || sv.cpf_masked || sv.cpfMasked || sv.id || `server-${idx}`) as string;
-          const existing = mergedMap.get(key);
-          const serverHasRealName = sv.name && sv.name !== 'Eleitor Cívico Auditado' && !sv.name.includes('Desenvolvedor') && !sv.name.includes('Diretor');
-
-          if (existing) {
-            mergedMap.set(key, {
-              ...existing,
-              ...sv,
-              name: existing.name && existing.name !== 'Cidadão Eleitor' && !existing.name.includes('Auditado')
-                ? existing.name
-                : (serverHasRealName ? sv.name : existing.name),
-            });
-          } else {
-            mergedMap.set(key, sv);
-          }
+          mergedMap.set(key, sv);
         });
       }
+
+      // 2. Complementa com dados locais apenas se o servidor ainda não possuir
+      localVoters.forEach((lv, i) => {
+        const key = lv.cpfHash || lv.cpfMasked || `local-${i}`;
+        const existing = mergedMap.get(key);
+        if (!existing) {
+          mergedMap.set(key, {
+            id: `local-${i}`,
+            name: lv.name || lv.nameMasked || 'Cidadão Eleitor',
+            cpf_masked: lv.cpfMasked,
+            cpf_hash: lv.cpfHash,
+            email: lv.email || '',
+            phone: lv.phone || '',
+            state: lv.state || 'SP',
+            city: lv.city || '',
+            has_voted: lv.hasVoted ?? true,
+            poll_id: lv.pollId,
+            created_at: lv.registeredAt,
+          });
+        } else {
+          // Se o servidor tiver nome genérico ou faltante, complementa com os dados locais
+          const isGeneric = !existing.name || existing.name === 'Eleitor Cívico Auditado' || existing.name === 'Cidadão Eleitor';
+          if (isGeneric && lv.name && lv.name !== 'Cidadão Eleitor') {
+            mergedMap.set(key, {
+              ...existing,
+              name: lv.name,
+              email: existing.email || lv.email || '',
+              phone: existing.phone || lv.phone || '',
+            });
+          }
+        }
+      });
 
       const mergedList = Array.from(mergedMap.values());
       if (mergedList.length > 0) {
