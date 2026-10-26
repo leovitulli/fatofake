@@ -32,7 +32,17 @@ import {
   ChevronRight,
   Send,
   Heart,
-  User
+  User,
+  Archive,
+  History,
+  FolderArchive,
+  RotateCcw,
+  Award,
+  PlusCircle,
+  X,
+  BarChart3,
+  Calendar,
+  Eye
 } from 'lucide-react';
 import { 
   validarCPF, 
@@ -133,6 +143,190 @@ function MinhaAreaContent() {
   // Helper para verificar se um CPF é estritamente o do desenvolvedor/administrador
   const checkIsAdminCpf = (cleanCpf: string): boolean => {
     return cleanCpf === DEVELOPER_ADMIN_CPF;
+  };
+
+  // Gestão de Pleitos Eleitorais e Arquivo Histórico Cívico
+  const [adminActivePolls, setAdminActivePolls] = useState<any[]>([]);
+  const [adminArchivedPolls, setAdminArchivedPolls] = useState<any[]>([]);
+  const [isLoadingElections, setIsLoadingElections] = useState(false);
+  const [isArchivingPollId, setIsArchivingPollId] = useState<string | null>(null);
+  const [electionsFeedback, setElectionsFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [selectedArchiveDetail, setSelectedArchiveDetail] = useState<any | null>(null);
+  const [showCreatePollModal, setShowCreatePollModal] = useState(false);
+  const [newPollForm, setNewPollForm] = useState({
+    id: '',
+    title: '',
+    role: 'Presidente da República',
+    state: 'BR',
+    round: '1º Turno',
+    survey_date: '2026',
+    candidatesText: 'Tarcísio de Freitas - REPUBLICANOS\nRatinho Jr - PSD\nRomeu Zema - NOVO\nLula - PT\nBranco / Nulo - VOTO_NEUTRO'
+  });
+  const [isCreatingPoll, setIsCreatingPoll] = useState(false);
+
+  const loadAdminElectionsData = async (adminCpf?: string) => {
+    setIsLoadingElections(true);
+    const token = adminCpf || DEVELOPER_ADMIN_CPF;
+    try {
+      const res = await fetch(`/api/admin/elections?cpf=${encodeURIComponent(token)}&t=${Date.now()}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache',
+        },
+        cache: 'no-store'
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAdminActivePolls(data.activePolls || []);
+        setAdminArchivedPolls(data.archivedPolls || []);
+      }
+    } catch (err: any) {
+      console.error('Erro ao carregar eleições:', err);
+    } finally {
+      setIsLoadingElections(false);
+    }
+  };
+
+  const handleArchivePoll = async (pollId: string, pollTitle: string) => {
+    const confirmArchive = window.confirm(
+      `CONFIRMAÇÃO DE ARQUIVAMENTO HISTÓRICO:\n\nTem certeza de que deseja ARQUIVAR e CONGELAR o pleito "${pollTitle}"?\n\n• O resultado atual e os votos apurados serão salvos permanentemente no Arquivo Histórico Cívico restrito ao desenvolvedor.\n• A urna pública será ZERADA (0 votos) para início imediato de um novo ciclo eleitoral.\n• Esta operação é segura, auditável e irreversível.`
+    );
+    if (!confirmArchive) return;
+
+    setIsArchivingPollId(pollId);
+    setElectionsFeedback(null);
+    try {
+      const token = DEVELOPER_ADMIN_CPF;
+      const res = await fetch('/api/admin/elections', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: 'archive_and_freeze',
+          pollId,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setElectionsFeedback({
+          type: 'success',
+          message: `Pleito "${pollTitle}" arquivado com sucesso no Arquivo Histórico! Urna pública reiniciada com 0 votos.`
+        });
+        await loadAdminElectionsData(token);
+        await loadAdminVotersData(token);
+      } else {
+        setElectionsFeedback({
+          type: 'error',
+          message: data.error || 'Falha ao arquivar pleito eleitoral.'
+        });
+      }
+    } catch (err: any) {
+      setElectionsFeedback({
+        type: 'error',
+        message: err.message || 'Erro de conexão ao arquivar pleito.'
+      });
+    } finally {
+      setIsArchivingPollId(null);
+    }
+  };
+
+  const handleCreateNewPoll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPollForm.title.trim()) {
+      alert('Por favor, informe o título da nova eleição.');
+      return;
+    }
+    const slug = newPollForm.id.trim() || newPollForm.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+    
+    const parsedCandidates = newPollForm.candidatesText
+      .split('\n')
+      .map(line => line.trim())
+      .filter(Boolean)
+      .map((line, idx) => {
+        const parts = line.split('-').map(p => p.trim());
+        const name = parts[0] || `Candidato ${idx + 1}`;
+        const party = parts[1] || 'PARTIDO';
+        return {
+          id: `cand-${idx + 1}-${Date.now()}`,
+          name,
+          party,
+          votes: 0,
+          percentage: 0
+        };
+      });
+
+    if (parsedCandidates.length === 0) {
+      alert('Adicione ao menos um candidato na lista (um por linha no formato: Nome - Partido).');
+      return;
+    }
+
+    setIsCreatingPoll(true);
+    setElectionsFeedback(null);
+    try {
+      const token = DEVELOPER_ADMIN_CPF;
+      const res = await fetch('/api/admin/elections', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: 'create_poll',
+          newPoll: {
+            id: slug,
+            title: newPollForm.title.trim(),
+            role: newPollForm.role.trim() || 'Cargo Eletivo',
+            state: newPollForm.state || 'BR',
+            round: newPollForm.round || '1º Turno',
+            survey_date: newPollForm.survey_date || '2026',
+            candidates: parsedCandidates,
+          }
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setElectionsFeedback({
+          type: 'success',
+          message: `Novo pleito "${newPollForm.title}" criado e registrado com sucesso!`
+        });
+        setShowCreatePollModal(false);
+        setNewPollForm({
+          id: '',
+          title: '',
+          role: 'Presidente da República',
+          state: 'BR',
+          round: '1º Turno',
+          survey_date: '2026',
+          candidatesText: ''
+        });
+        await loadAdminElectionsData(token);
+      } else {
+        setElectionsFeedback({
+          type: 'error',
+          message: data.error || 'Erro ao cadastrar novo pleito.'
+        });
+      }
+    } catch (err: any) {
+      setElectionsFeedback({
+        type: 'error',
+        message: err.message || 'Erro de conexão ao criar novo pleito.'
+      });
+    } finally {
+      setIsCreatingPoll(false);
+    }
+  };
+
+  const handleDownloadArchiveJSON = (archiveItem: any) => {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(archiveItem, null, 2));
+    const downloadAnchor = document.createElement('a');
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", `comprovante-pleito-${archiveItem.id}.json`);
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    downloadAnchor.remove();
   };
 
   // Handler para acionar a validação cívica do hash na urna cega
@@ -237,6 +431,7 @@ function MinhaAreaContent() {
           if (isDevAdmin) {
             setIsSuperUser(true);
             loadAdminVotersData(cleanToken || DEVELOPER_ADMIN_CPF);
+            loadAdminElectionsData(cleanToken || DEVELOPER_ADMIN_CPF);
           }
         }
       } catch {
@@ -481,13 +676,13 @@ function MinhaAreaContent() {
         // Acesso exclusivo do desenvolvedor / administrador oficial da plataforma
         targetVoter = {
           id: 'admin-master-voter',
-          name: 'Desenvolvedor',
+          name: 'Leandro Vitulli',
           cpf_masked: masked,
           cpf_hash: 'hash_fatosfakes_admin_' + cleanCpf,
-          email: '',
+          email: 'admin@fatosfakes2026.org',
           phone: '',
-          state: 'BR',
-          city: 'Painel Central',
+          state: 'SP',
+          city: 'São Paulo',
           has_voted: true,
           poll_id: 'eleicao-presidencia-2026',
           created_at: new Date().toISOString(),
@@ -506,6 +701,7 @@ function MinhaAreaContent() {
           setIsSuperUser(true);
           sessionStorage.setItem('fatosfakes_admin_auth_token', cleanCpf);
           loadAdminVotersData(cleanCpf);
+          loadAdminElectionsData(cleanCpf);
         }
       } else {
         const rawErr = data?.rawError || data?.error || 'Registro cívico não localizado para este CPF';
@@ -539,17 +735,18 @@ function MinhaAreaContent() {
           setIsSuperUser(true);
           sessionStorage.setItem('fatosfakes_admin_auth_token', cleanCpf);
           loadAdminVotersData(cleanCpf);
+          loadAdminElectionsData(cleanCpf);
         }
       } else if (checkIsAdminCpf(cleanCpf)) {
         const adminVoter: VoterData = {
           id: 'admin-master-voter',
-          name: 'Desenvolvedor',
+          name: 'Leandro Vitulli',
           cpf_masked: masked,
           cpf_hash: 'hash_fatosfakes_admin_' + cleanCpf,
-          email: '',
+          email: 'admin@fatosfakes2026.org',
           phone: '',
-          state: 'BR',
-          city: 'Painel Central',
+          state: 'SP',
+          city: 'São Paulo',
           has_voted: true,
           poll_id: 'eleicao-presidencia-2026',
           created_at: new Date().toISOString(),
@@ -562,6 +759,7 @@ function MinhaAreaContent() {
         sessionStorage.setItem('fatosfakes_voter_session', JSON.stringify(adminVoter));
         sessionStorage.setItem('fatosfakes_admin_auth_token', cleanCpf);
         loadAdminVotersData(cleanCpf);
+        loadAdminElectionsData(cleanCpf);
       } else {
         setRawErrorDetail(fetchErr?.message || 'Falha de conexão com o servidor');
         setVoterError('O serviço de consulta está momentaneamente instável. Por favor, tente novamente em alguns instantes.');
@@ -1363,6 +1561,269 @@ function MinhaAreaContent() {
               </form>
             </div>
 
+            {/* GESTÃO DE PLEITOS ELEITORAIS E ARQUIVO HISTÓRICO CÍVICO */}
+            <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-800">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 border border-amber-500/30 text-amber-300 uppercase tracking-wider flex items-center gap-1">
+                      <Lock className="w-3 h-3" />
+                      Exclusivo do Desenvolvedor
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      Supabase Cloud · Urna Cega
+                    </span>
+                  </div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Vote className="w-5 h-5 text-emerald-400" />
+                    <span>Gestão de Pleitos Eleitorais &amp; Arquivo Cívico</span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Controle de eleições em andamento, apuração em tempo real e congelamento seguro em histórico restrito ao desenvolvedor (sem exposição pública de pleitos passados).
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => loadAdminElectionsData()}
+                    disabled={isLoadingElections}
+                    className="py-2 px-3 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-300 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isLoadingElections ? 'animate-spin text-emerald-400' : 'text-slate-400'}`} />
+                    <span>Atualizar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCreatePollModal(true)}
+                    className="py-2 px-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-colors shadow-md cursor-pointer"
+                  >
+                    <PlusCircle className="w-4 h-4" />
+                    <span>Novo Pleito</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Feedback Alert */}
+              {electionsFeedback && (
+                <div className={`p-3.5 rounded-xl border text-xs flex items-center justify-between gap-3 ${
+                  electionsFeedback.type === 'success' 
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' 
+                    : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {electionsFeedback.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    )}
+                    <span>{electionsFeedback.message}</span>
+                  </div>
+                  <button 
+                    onClick={() => setElectionsFeedback(null)} 
+                    className="text-slate-400 hover:text-white p-1"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+
+              {/* SEÇÃO 1: PLEITOS ATIVOS / URNAS ABERTAS */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    Pleitos Ativos na Plataforma ({adminActivePolls.length})
+                  </h4>
+                  <span className="text-[11px] text-slate-500">
+                    Votos computados de eleitores reais
+                  </span>
+                </div>
+
+                {adminActivePolls.length === 0 ? (
+                  <div className="p-6 rounded-xl bg-[#080e18] border border-slate-800 text-center space-y-2">
+                    <Vote className="w-8 h-8 text-slate-600 mx-auto" />
+                    <p className="text-xs text-slate-400">Nenhum pleito ativo no momento.</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowCreatePollModal(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-xs font-semibold hover:bg-emerald-500/30 cursor-pointer"
+                    >
+                      <PlusCircle className="w-3.5 h-3.5" />
+                      Criar Primeiro Pleito
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {adminActivePolls.map((poll: any) => {
+                      const totalVotes = Number(poll.total_votes || 0);
+                      const candidates = Array.isArray(poll.candidates) ? poll.candidates : [];
+                      const isArchiving = isArchivingPollId === poll.id;
+
+                      return (
+                        <div 
+                          key={poll.id} 
+                          className="bg-[#080e18] border border-slate-800 hover:border-slate-700/80 rounded-xl p-4.5 space-y-4 transition-all"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400">
+                                  🟢 Urna Aberta
+                                </span>
+                                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-slate-800 text-slate-300">
+                                  {poll.role || 'Geral'} · {poll.state || 'BR'}
+                                </span>
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  ID: {poll.id}
+                                </span>
+                              </div>
+                              <h5 className="text-sm font-bold text-white">
+                                {poll.title}
+                              </h5>
+                            </div>
+
+                            <div className="text-right shrink-0">
+                              <span className="text-xl font-black text-emerald-400 tabular-nums block">
+                                {totalVotes}
+                              </span>
+                              <span className="text-[10px] text-slate-400 uppercase tracking-wider block">
+                                {totalVotes === 1 ? 'voto registrado' : 'votos na urna'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Lista resumida de candidatos */}
+                          <div className="space-y-1.5 pt-2 border-t border-slate-800/80">
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">
+                              Candidatos ({candidates.length}):
+                            </span>
+                            <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                              {candidates.map((cand: any, cIdx: number) => {
+                                const cVotes = Number(cand.votes || 0);
+                                const pct = totalVotes > 0 ? ((cVotes / totalVotes) * 100).toFixed(1) : '0.0';
+                                return (
+                                  <div 
+                                    key={cand.id || cIdx}
+                                    className="flex items-center justify-between text-xs py-1 px-2 rounded-lg bg-slate-900/60 border border-slate-800/60"
+                                  >
+                                    <div className="truncate pr-2">
+                                      <span className="font-medium text-slate-200">{cand.name}</span>
+                                      <span className="text-[10px] text-slate-500 ml-1.5">({cand.party})</span>
+                                    </div>
+                                    <div className="text-right shrink-0 font-mono text-[11px] text-slate-300">
+                                      <span className="font-bold">{cVotes}</span>
+                                      <span className="text-slate-500 text-[10px] ml-1">({pct}%)</span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+
+                          {/* Ações do Pleito */}
+                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+                            <span className="text-[10px] text-slate-500">
+                              Rodada: {poll.round || '1º Turno'} · {poll.survey_date || '2026'}
+                            </span>
+
+                            <button
+                              type="button"
+                              onClick={() => handleArchivePoll(poll.id, poll.title)}
+                              disabled={isArchiving}
+                              className="px-3 py-1.5 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                              title="Salva os votos atuais no Arquivo Histórico do desenvolvedor e zera a urna pública para a próxima rodada"
+                            >
+                              {isArchiving ? (
+                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <FolderArchive className="w-3.5 h-3.5 text-amber-400" />
+                              )}
+                              <span>Arquivar &amp; Zerar Urna</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* SEÇÃO 2: ARQUIVO HISTÓRICO CÍVICO (PLEITOS CONGELADOS) */}
+              <div className="space-y-3 pt-4 border-t border-slate-800">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <History className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Arquivo Histórico Cívico ({adminArchivedPolls.length} snapshots congelados)</span>
+                  </h4>
+                  <span className="text-[11px] text-slate-500">
+                    Guardado em sigilo para auditoria do desenvolvedor (fora do ar público)
+                  </span>
+                </div>
+
+                {adminArchivedPolls.length === 0 ? (
+                  <div className="p-4 rounded-xl bg-[#080e18] border border-slate-800/80 text-center">
+                    <p className="text-xs text-slate-500">
+                      Nenhum pleito arquivado anteriormente. Ao clicar em &quot;Arquivar &amp; Zerar Urna&quot;, o snapshot com votos congelados ficará listado aqui.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {adminArchivedPolls.map((arc: any) => {
+                      const totalArchivedVotes = Number(arc.total_votes || 0);
+                      const createdDate = arc.created_at ? new Date(arc.created_at).toLocaleString('pt-BR') : 'Data não informada';
+
+                      return (
+                        <div
+                          key={arc.id}
+                          className="p-3.5 rounded-xl bg-[#080e18] border border-slate-800 hover:border-slate-700 space-y-3 transition-colors"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="px-2 py-0.5 rounded text-[9px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                                ARQUIVADO
+                              </span>
+                              <span className="text-[10px] text-slate-500">
+                                {createdDate}
+                              </span>
+                            </div>
+                            <h5 className="text-xs font-bold text-slate-200 line-clamp-1" title={arc.title}>
+                              {arc.title}
+                            </h5>
+                            <p className="text-[11px] text-slate-400 font-mono">
+                              {arc.role || 'Cargo'} · {totalArchivedVotes} {totalArchivedVotes === 1 ? 'voto' : 'votos computados'}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedArchiveDetail(arc)}
+                              className="text-xs text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1 cursor-pointer"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              <span>Ver Apuração</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadArchiveJSON(arc)}
+                              className="text-[11px] text-slate-400 hover:text-slate-200 flex items-center gap-1 cursor-pointer"
+                              title="Baixar comprovante de arquivo (JSON)"
+                            >
+                              <Download className="w-3 h-3" />
+                              <span>Exportar</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* TABELA DE AUDITORIA DE TODOS OS ELEITORES CADASTRADOS */}
             <div className="bg-[#0b1524] border border-slate-800 rounded-2xl p-6 shadow-xl space-y-6">
               
@@ -1666,6 +2127,243 @@ function MinhaAreaContent() {
                 Fechar Validador
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: APURAÇÃO DETALHADA DO ARQUIVO HISTÓRICO */}
+      {selectedArchiveDetail && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0b1524] border border-slate-700 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-in fade-in duration-150 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-3">
+              <div className="space-y-1">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+                  SNAPSHOT CÍVICO HISTÓRICO
+                </span>
+                <h3 className="text-base font-bold text-white">
+                  {selectedArchiveDetail.title}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Identificador: <span className="font-mono text-cyan-300">{selectedArchiveDetail.id}</span>
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedArchiveDetail(null)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
+              <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                <span className="text-[10px] text-slate-500 block uppercase">Total Apurado</span>
+                <span className="text-base font-bold text-emerald-400">
+                  {selectedArchiveDetail.total_votes || 0} votos
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                <span className="text-[10px] text-slate-500 block uppercase">Cargo / Região</span>
+                <span className="text-xs font-semibold text-slate-200">
+                  {selectedArchiveDetail.role || 'Geral'} ({selectedArchiveDetail.state || 'BR'})
+                </span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 col-span-2 sm:col-span-1">
+                <span className="text-[10px] text-slate-500 block uppercase">Data de Congelamento</span>
+                <span className="text-[11px] text-slate-300">
+                  {selectedArchiveDetail.created_at ? new Date(selectedArchiveDetail.created_at).toLocaleString('pt-BR') : '2026'}
+                </span>
+              </div>
+            </div>
+
+            {/* Tabela de Candidatos e Votos */}
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
+                Placar Oficial Congelado na Urna:
+              </span>
+              <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                {Array.isArray(selectedArchiveDetail.candidates) && selectedArchiveDetail.candidates.map((cand: any, idx: number) => {
+                  const votes = Number(cand.votes || 0);
+                  const total = Number(selectedArchiveDetail.total_votes || 0);
+                  const pct = total > 0 ? ((votes / total) * 100).toFixed(1) : '0.0';
+                  return (
+                    <div
+                      key={cand.id || idx}
+                      className="p-2.5 rounded-xl bg-[#080e18] border border-slate-800 flex items-center justify-between text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="w-5 h-5 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold flex items-center justify-center shrink-0">
+                          {idx + 1}º
+                        </span>
+                        <div>
+                          <span className="font-bold text-slate-100">{cand.name}</span>
+                          <span className="text-[10px] text-slate-400 ml-1.5">({cand.party})</span>
+                        </div>
+                      </div>
+                      <div className="text-right font-mono">
+                        <span className="text-emerald-400 font-bold">{votes} votos</span>
+                        <span className="text-slate-500 text-[10px] ml-1.5">({pct}%)</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => handleDownloadArchiveJSON(selectedArchiveDetail)}
+                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Baixar JSON</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedArchiveDetail(null)}
+                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl transition-colors cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: CRIAR NOVO PLEITO / ELEIÇÃO */}
+      {showCreatePollModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0b1524] border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in duration-150 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-800 pb-3">
+              <div className="space-y-1">
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                  NOVO PLEITO ELEITORAL
+                </span>
+                <h3 className="text-base font-bold text-white">
+                  Cadastrar Nova Eleição / Urna
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowCreatePollModal(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNewPoll} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Título da Eleição:
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={newPollForm.title}
+                  onChange={(e) => setNewPollForm({ ...newPollForm, title: e.target.value })}
+                  placeholder="Ex: Eleição Presidencial 2026 - 1º Turno"
+                  className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Cargo Eletivo:
+                  </label>
+                  <input
+                    type="text"
+                    value={newPollForm.role}
+                    onChange={(e) => setNewPollForm({ ...newPollForm, role: e.target.value })}
+                    placeholder="Ex: Presidente da República"
+                    className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Estado (UF):
+                  </label>
+                  <select
+                    value={newPollForm.state}
+                    onChange={(e) => setNewPollForm({ ...newPollForm, state: e.target.value })}
+                    className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                  >
+                    <option value="BR">Nacional (BR)</option>
+                    {BRAZIL_STATES.map(uf => (
+                      <option key={uf} value={uf}>{uf}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Turno:
+                  </label>
+                  <select
+                    value={newPollForm.round}
+                    onChange={(e) => setNewPollForm({ ...newPollForm, round: e.target.value })}
+                    className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none"
+                  >
+                    <option value="1º Turno">1º Turno</option>
+                    <option value="2º Turno">2º Turno</option>
+                    <option value="Turno Único">Turno Único</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                    Ano / Data:
+                  </label>
+                  <input
+                    type="text"
+                    value={newPollForm.survey_date}
+                    onChange={(e) => setNewPollForm({ ...newPollForm, survey_date: e.target.value })}
+                    placeholder="2026"
+                    className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Lista de Candidatos (1 por linha: <span className="text-cyan-400 font-mono">Nome - Sigla Partido</span>):
+                </label>
+                <textarea
+                  rows={5}
+                  required
+                  value={newPollForm.candidatesText}
+                  onChange={(e) => setNewPollForm({ ...newPollForm, candidatesText: e.target.value })}
+                  placeholder="Tarcísio de Freitas - REPUBLICANOS&#10;Ratinho Jr - PSD&#10;Romeu Zema - NOVO&#10;Lula - PT&#10;Branco / Nulo - VOTO_NEUTRO"
+                  className="w-full bg-[#080e18] border border-slate-700 focus:border-emerald-500 rounded-xl p-3 text-xs text-white font-mono focus:outline-none leading-relaxed"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowCreatePollModal(false)}
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-medium rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCreatingPoll}
+                  className="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 text-xs font-bold rounded-xl transition-colors shadow-md flex items-center gap-1.5 cursor-pointer"
+                >
+                  {isCreatingPoll ? (
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <PlusCircle className="w-3.5 h-3.5" />
+                  )}
+                  <span>Criar e Abrir Urna</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

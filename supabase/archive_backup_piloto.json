@@ -1,0 +1,178 @@
+{
+  "archive_id": "archive-piloto-homologacao-2026-10-24",
+  "title": "Fase de Homologação e Testes Piloto (Outubro 2026)",
+  "archived_at": "2026-10-26T22:37:20.881Z",
+  "total_votes": 2,
+  "votes": [
+    {
+      "id": "f594d388-614b-4e33-a74f-649e6206b484",
+      "poll_id": "eleicao-presidencia-2026",
+      "candidate_id": "cand-lula",
+      "voter_hash": "5936432aa9131200970710c514378066887c9e9aa9aa61c3c548135dd365d867",
+      "created_at": "2026-10-23T17:59:11.214527+00:00"
+    },
+    {
+      "id": "30ea5d2b-a788-49f2-b88e-f1a984b4a00a",
+      "poll_id": "eleicao-presidencia-2026",
+      "candidate_id": "cand-lula",
+      "voter_hash": "5feb43496eedffcfe74504979afa803633d48f17d21edadf8914806163a04227",
+      "created_at": "2026-10-23T17:52:11.459633+00:00"
+    }
+  ],
+  "voters": [
+    {
+      "id": "30ea5d2b-a788-49f2-b88e-f1a984b4a00a",
+      "name": "Leandro Vitulli",
+      "cpf_masked": "***.***.398-11",
+      "cpf_hash": "5feb43496eedffcfe74504979afa803633d48f17d21edadf8914806163a04227",
+      "email": "admin@fatosfakes2026.org",
+      "phone": "",
+      "state": "SP",
+      "city": "São Paulo",
+      "has_voted": true,
+      "poll_id": "eleicao-presidencia-2026",
+      "created_at": "2026-10-23T17:52:11.459633+00:00",
+      "updated_at": "2026-10-24T06:38:50.528842+00:00"
+    },
+    {
+      "id": "f594d388-614b-4e33-a74f-649e6206b484",
+      "name": "Aline",
+      "cpf_masked": "***.***.***-**",
+      "cpf_hash": "5936432aa9131200970710c514378066887c9e9aa9aa61c3c548135dd365d867",
+      "email": "",
+      "phone": "",
+      "state": "SP",
+      "city": "São Paulo",
+      "has_voted": true,
+      "poll_id": "eleicao-presidencia-2026",
+      "created_at": "2026-10-23T17:59:11.214527+00:00",
+      "updated_at": "2026-10-24T06:38:50.528842+00:00"
+    }
+  ],
+  "polls_snapshot": [
+    {
+      "id": "eleicao-governo-sp-2026",
+      "title": "Pesquisa Cívica: Governo do Estado de São Paulo 2026 (2º Turno)",
+      "role": "Governador",
+      "state": "SP",
+      "round": "2º Turno",
+      "survey_date": "Outubro 2026",
+      "total_votes": 0,
+      "candidates": [
+        {
+          "id": "cand-sp-tarcisio",
+          "name": "Tarcísio Gomes de Freitas",
+          "party": "Republicanos",
+          "votes": 0,
+          "number": "10",
+          "photoUrl": "/images/politicians/tarcisio-freitas.jpg",
+          "popularName": "Tarcísio",
+          "politicianId": "tarcisio-freitas",
+          "judicialStatusSummary": "Ficha Limpa apto · Sem condenações transitadas em julgado"
+        },
+        {
+          "id": "cand-sp-haddad",
+          "name": "Fernando Haddad",
+          "party": "PT",
+          "votes": 0,
+          "number": "13",
+          "photoUrl": "/images/politicians/lula.jpg",
+          "popularName": "Haddad",
+          "politicianId": "lula",
+          "judicialStatusSummary": "Ficha Limpa apto · Contas aprovadas pelo TCE-SP"
+        },
+        {
+          "id": "cand-branco-nulo-sp",
+          "name": "Voto em Branco ou Nulo",
+          "party": "Nenhum",
+          "votes": 0,
+          "number": "00",
+          "photoUrl": "/images/politicians/branco-nulo.svg",
+          "popularName": "Branco / Nulo"
+        }
+      ],
+      "created_at": "2026-10-23T06:13:38.954793+00:00"
+    },
+    {
+      "id": "eleicao-presidencia-2026",
+      "title": "Pesquisa Cívica: Presidência da República 2026 (2º Turno)",
+      "role": "Presidente",
+      "state": "BR",
+      "round": "2º Turno",
+      "survey_date": "Outubro 2026",
+      "total_votes": 2,
+      "candidates": [
+        {
+          "id": "cand-lula",
+          "name": "Luiz Inácio Lula da Silva",
+          "party": "PT",
+          "votes": 2,
+          "number": "13",
+          "photoUrl": "/images/politicians/lula.jpg",
+          "popularName": "Lula",
+          "politicianId": "lula",
+          "judicialStatusSummary": "Processos da Lava Jato anulados pelo STF · Ficha Limpa apto"
+        },
+        {
+          "id": "cand-flavio",
+          "name": "Flávio Nantes Bolsonaro",
+          "party": "PL",
+          "votes": 0,
+          "number": "22",
+          "photoUrl": "/images/politicians/flavio-bolsonaro.jpg",
+          "popularName": "Flávio Bolsonaro",
+          "politicianId": "flavio-bolsonaro",
+          "judicialStatusSummary": "Ficha Limpa apto · Processo criminal da Alerj arquivado pelo TJ-RJ sem julgamento de mérito"
+        },
+        {
+          "id": "cand-branco-nulo",
+          "name": "Voto em Branco ou Nulo",
+          "party": "Nenhum",
+          "votes": 0,
+          "number": "00",
+          "photoUrl": "/images/politicians/branco-nulo.svg",
+          "popularName": "Branco / Nulo"
+        }
+      ],
+      "created_at": "2026-10-23T06:13:38.954793+00:00"
+    },
+    {
+      "id": "voters-cloud-registry",
+      "title": "Registro Central de Eleitores Cívicos",
+      "role": "REGISTRY",
+      "state": "BR",
+      "round": "2º Turno",
+      "survey_date": "Outubro 2026",
+      "total_votes": 2,
+      "candidates": [
+        {
+          "id": "voter-leandro-vitulli",
+          "city": "São Paulo",
+          "name": "Leandro Vitulli",
+          "email": "admin@fatosfakes2026.org",
+          "phone": "",
+          "state": "SP",
+          "poll_id": "eleicao-presidencia-2026",
+          "cpf_hash": "5feb43496eedffcfe74504979afa803633d48f17d21edadf8914806163a04227",
+          "has_voted": true,
+          "cpf_masked": "***.***.398-11",
+          "created_at": "2026-10-23T17:52:11.459633+00:00"
+        },
+        {
+          "id": "voter-aline",
+          "city": "São Paulo",
+          "name": "Aline",
+          "email": "",
+          "phone": "",
+          "state": "SP",
+          "poll_id": "eleicao-presidencia-2026",
+          "cpf_hash": "5936432aa9131200970710c514378066887c9e9aa9aa61c3c548135dd365d867",
+          "has_voted": true,
+          "cpf_masked": "***.***.***-**",
+          "created_at": "2026-10-23T17:59:11.214527+00:00"
+        }
+      ],
+      "created_at": "2026-10-24T05:12:26.66195+00:00"
+    }
+  ]
+}

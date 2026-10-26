@@ -10,7 +10,7 @@ export const INITIAL_POLLS: ElectionPoll[] = [
     year: 2026,
     description: 'Enquete cívica auditada com voto secreto por CPF único. Disputa oficial do 2º Turno entre os dois finalistas para a Presidência da República.',
     status: 'ABERTA',
-    totalVotes: 2,
+    totalVotes: 0,
     candidates: [
       {
         id: 'cand-lula',
@@ -20,7 +20,7 @@ export const INITIAL_POLLS: ElectionPoll[] = [
         party: 'PT',
         photoUrl: '/images/politicians/lula.jpg',
         politicianId: 'lula',
-        votes: 2,
+        votes: 0,
         judicialStatusSummary: 'Processos da Lava Jato anulados pelo STF · Ficha Limpa apto',
       },
       {
