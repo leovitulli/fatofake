@@ -114,6 +114,17 @@ function MinhaAreaContent() {
   const [profileSuccessMsg, setProfileSuccessMsg] = useState('');
   const [profileErrorMsg, setProfileErrorMsg] = useState('');
 
+  // Detecção inteligente e resiliente do desenvolvedor oficial (Leandro Vitulli)
+  const isDeveloperUser = Boolean(
+    isSuperUser ||
+    (voterProfile && (
+      (voterProfile.cpf_masked && voterProfile.cpf_masked.endsWith('398-11')) ||
+      (voterProfile.cpfMasked && voterProfile.cpfMasked.endsWith('398-11')) ||
+      voterProfile.email === 'leovitulli@gmail.com' ||
+      voterProfile.email === 'admin@fatosfakes2026.org'
+    ))
+  );
+
   // Gestão Administrativa & Tabela de Eleitores
   const [votersList, setVotersList] = useState<VoterData[]>([]);
   const [isLoadingAdminData, setIsLoadingAdminData] = useState(false);
@@ -427,9 +438,16 @@ function MinhaAreaContent() {
           // Verifica se esse CPF tem privilégio exclusivo de gestão (apenas o desenvolvedor oficial)
           const adminToken = sessionStorage.getItem('fatosfakes_admin_auth_token') || '';
           const cleanToken = adminToken.replace(/\D/g, '');
-          const isDevAdmin = checkIsAdminCpf(cleanToken) || parsed.is_admin === true || (parsed.cpf_hash && String(parsed.cpf_hash).startsWith('hash_fatosfakes_admin_'));
+          const isDevAdmin = checkIsAdminCpf(cleanToken) || 
+            parsed.is_admin === true || 
+            (parsed.cpf_hash && String(parsed.cpf_hash).startsWith('hash_fatosfakes_admin_')) ||
+            (parsed.cpf_masked && parsed.cpf_masked.endsWith('398-11')) ||
+            (parsed.cpfMasked && parsed.cpfMasked.endsWith('398-11')) ||
+            parsed.email === 'leovitulli@gmail.com' ||
+            parsed.email === 'admin@fatosfakes2026.org';
           if (isDevAdmin) {
             setIsSuperUser(true);
+            sessionStorage.setItem('fatosfakes_admin_auth_token', cleanToken || DEVELOPER_ADMIN_CPF);
             loadAdminVotersData(cleanToken || DEVELOPER_ADMIN_CPF);
             loadAdminElectionsData(cleanToken || DEVELOPER_ADMIN_CPF);
           }
@@ -448,6 +466,16 @@ function MinhaAreaContent() {
       setPixProposito(cfg.proposito || 'Manutenção de servidores, banco de dados auditável e apuração cívica 100% independente.');
     });
   }, []);
+
+  // Garante que o desenvolvedor oficial tenha privilégios de superusuário imediatamente
+  useEffect(() => {
+    if (isDeveloperUser && !isSuperUser) {
+      setIsSuperUser(true);
+      sessionStorage.setItem('fatosfakes_admin_auth_token', DEVELOPER_ADMIN_CPF);
+      loadAdminVotersData(DEVELOPER_ADMIN_CPF);
+      loadAdminElectionsData(DEVELOPER_ADMIN_CPF);
+    }
+  }, [isDeveloperUser, isSuperUser]);
 
   // Handlers para controle do PIX diretamente pela plataforma
   const handleTogglePix = async (targetVal: boolean) => {
@@ -946,7 +974,7 @@ function MinhaAreaContent() {
 
           {currentUserRole !== 'guest' && (
             <div className="flex items-center gap-3">
-              {isSuperUser && (
+              {isDeveloperUser && (
                 <div className="flex items-center bg-slate-900 p-1 rounded-xl border border-slate-800">
                   <button
                     onClick={() => setActivePortalTab('profile')}
@@ -1128,7 +1156,7 @@ function MinhaAreaContent() {
           <div className="max-w-3xl mx-auto space-y-6">
 
             {/* SE O CPF FOR DO ADMINISTRADOR: CARD DESTACADO PARA ABRIR GESTÃO */}
-            {isSuperUser && (
+            {isDeveloperUser && (
               <div className="bg-gradient-to-r from-[#0b1c33] to-[#091527] border border-cyan-500/40 rounded-2xl p-5 shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center shrink-0">
@@ -1164,7 +1192,7 @@ function MinhaAreaContent() {
                       <CheckCircle2 className="w-3 h-3" />
                       Cadastro Cívico Autenticado
                     </span>
-                    {isSuperUser && (
+                    {isDeveloperUser && (
                       <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
                         <Compass className="w-3 h-3" />
                         Desenvolvedor Oficial
@@ -1410,7 +1438,7 @@ function MinhaAreaContent() {
         {/* ============================================================== */}
         {/* CASO 3: GESTÃO & GEOLOCALIZAÇÃO (EXCLUSIVO DA DIRETORIA)       */}
         {/* ============================================================== */}
-        {currentUserRole === 'voter' && isSuperUser && activePortalTab === 'management' && (
+        {currentUserRole === 'voter' && isDeveloperUser && activePortalTab === 'management' && (
           <div className="space-y-8">
             
             {/* Componente Executivo de Geolocalização & Relatório do CEO */}
